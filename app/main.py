@@ -18,8 +18,7 @@ from app.models import Product
 from app.models import Struct2obprod
 from app.models import Atc
 from app.models import Struct2atc
-
-from app.models import DrugClass  # Replace with actual table name if different
+from app.models import DrugClass
 from app.models import Doid
 from app.database import SessionLocal
 from urllib.parse import unquote
