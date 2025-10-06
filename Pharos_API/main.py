@@ -14,6 +14,8 @@ from datetime import datetime
 # Add current directory to Python path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
+
 # Import configuration and routers
 from config import settings, validate_configuration
 from api.targets import router as targets_router
@@ -87,6 +89,16 @@ async def root():
             "pagination": "Use skip and limit parameters"
         }
     }
+
+
+# # Health check endpoint
+# @app.get("/health", tags=["monitoring"])
+# async def health_check():
+#     """
+#     Simple health check for App Runner
+#     """
+#     return {"status": "healthy"}
+
 
 # Health check endpoint
 @app.get("/health", tags=["monitoring"])
@@ -230,6 +242,26 @@ async def api_info():
             "openapi_spec": "/openapi.json"
         }
     }
+
+
+# @app.on_event("startup")
+# async def startup_event():
+#     logger.info("Starting Pharos API Gateway...")
+
+#     if not DEMO_MODE:
+#         # Only run these checks if NOT in demo mode
+#         if not validate_configuration():
+#             raise RuntimeError("Invalid configuration")
+        
+#         try:
+#             connection_status = await check_pharos_connection()
+#             if connection_status["status"] != "healthy":
+#                 logger.warning("Pharos connection degraded")
+#         except Exception as e:
+#             logger.error(f"Pharos connection failed: {e}")
+
+#     logger.info("Pharos API Gateway startup complete")
+
 
 # Startup event
 @app.on_event("startup")
