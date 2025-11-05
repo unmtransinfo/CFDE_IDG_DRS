@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.ligand_service import LigandService, check_ligand_service_health
 from schemas.responses import (
-    LigandResponse, LigandSearchResponse,
+    LigandResponse, LigandSearchResponse, LigandWithTargetsResponse,
     ErrorResponse
 )
 from config import settings
@@ -153,49 +153,64 @@ async def search_ligands(
             detail=f"Search failed: {str(e)}"
         )
 
-@router.get("/{ligand_id}/targets")
+@router.get("/{ligand_id}/targets", response_model=LigandWithTargetsResponse)
 async def get_ligand_targets(
     ligand_id: str = Path(
         ...,
-        description="Ligand identifier",
-        example="haloperidol"  
+        description="Ligand identifier (name, ChEMBL ID, etc.)",
+        example="haloperidol"
     ),
     max_targets: int = Query(
-        5,
+        10,
         description="Maximum number of targets to return",
         ge=1,
         le=50
+    ),
+    format: Optional[str] = Query(
+        "json",
+        description="Response format: json, csv, or tsv",
+        regex="^(json|csv|tsv)$"
     )
 ):
     """
-    Get ligand information with target interactions (cross-relationship feature)
-    
-    **NOTE**: This endpoint is planned for future version.
-    
-    - **ligand_id**: Ligand identifier to query
-    - **max_targets**: Maximum number of associated targets to return
-    
-    Will return ligand info plus target interaction data including:
-    - Target proteins that bind this ligand
-    - Activity measurements (IC50, Ki, etc.)
-    - Mechanism of action
+    Get ligand information with associated targets (proteins)
+
+    - **ligand_id**: Ligand identifier (name, ChEMBL ID, etc.)
+    - **max_targets**: Maximum number of associated targets to return (1-50)
+    - **format**: Response format (json, csv, tsv)
+
+    Returns ligand info plus associated target information including:
+    - Basic ligand information (name, ChEMBL ID, SMILES, drug status, etc.)
+    - List of associated target proteins
+    - Target details (gene symbol, UniProt ID, development level, etc.)
+
+    **Example:**
+    - `/ligands/haloperidol/targets` - Get haloperidol with target associations
+    - `/ligands/aspirin/targets?max_targets=20` - Get aspirin with up to 20 targets
+    - `/ligands/imatinib/targets?format=csv` - Download as CSV
     """
-    raise HTTPException(
-        status_code=501,
-        detail={
-            "message": "Ligand-target interactions endpoint planned for future version",
-            "available_endpoints": [
-                f"/ligands/{ligand_id}",
-                "/ligands?search=term"
-            ],
-            "planned_features": [
-                "Target binding data",
-                "Activity measurements",
-                "Mechanism of action"
-            ],
-            "estimated_completion": "Next version"
-        }
-    )
+    try:
+        # Get ligand with targets from service
+        result = await LigandService.get_ligand_with_targets(ligand_id, max_targets)
+
+        # Handle CSV/TSV format requests
+        if format.lower() in ["csv", "tsv"]:
+            return await _format_ligand_targets_as_csv(result, format.lower())
+
+        # Return JSON response (default)
+        if not result.success:
+            raise HTTPException(status_code=404, detail=result.message)
+
+        return result
+
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Internal server error: {str(e)}"
+        )
 
 # Helper functions for CSV formatting
 async def _format_ligand_as_csv(result: LigandResponse, format_type: str) -> Response:
@@ -332,4 +347,63 @@ async def get_approved_drugs(
                 "Indication-based search"
             ]
         }
+    )
+
+
+async def _format_ligand_targets_as_csv(result: LigandWithTargetsResponse, format_type: str) -> Response:
+    """
+    Convert ligand with targets response to CSV/TSV format
+    """
+    if not result.success or not result.data:
+        raise HTTPException(status_code=404, detail="Ligand not found")
+
+    # Prepare CSV data
+    delimiter = "," if format_type == "csv" else "\t"
+    output = io.StringIO()
+
+    # CSV headers
+    headers = [
+        "Ligand_Name", "ChEMBL_ID", "Is_Drug", "SMILES",
+        "Target_Name", "Gene_Symbol", "UniProt_ID", "Development_Level"
+    ]
+
+    writer = csv.writer(output, delimiter=delimiter)
+    writer.writerow(headers)
+
+    # Data rows - one row per target association
+    data = result.data
+    if data.associated_targets and len(data.associated_targets) > 0:
+        for target in data.associated_targets:
+            writer.writerow([
+                data.ligand_name or "",
+                data.chembl_id or "",
+                "Yes" if data.is_drug else "No" if data.is_drug is False else "Unknown",
+                (data.smiles[:50] + "...") if data.smiles and len(data.smiles) > 50 else (data.smiles or ""),
+                target.target_name or "",
+                target.gene_symbol or "",
+                target.uniprot_id or "",
+                target.development_level or ""
+            ])
+    else:
+        # If no targets, still write one row with ligand info
+        writer.writerow([
+            data.ligand_name or "",
+            data.chembl_id or "",
+            "Yes" if data.is_drug else "No" if data.is_drug is False else "Unknown",
+            (data.smiles[:50] + "...") if data.smiles and len(data.smiles) > 50 else (data.smiles or ""),
+            "No associated targets",
+            "",
+            "",
+            ""
+        ])
+
+    # Prepare response
+    content = output.getvalue()
+    media_type = "text/csv" if format_type == "csv" else "text/tab-separated-values"
+    filename = f"ligand_{result.ligand_id_queried}_targets.{format_type}"
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
     )

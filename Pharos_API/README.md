@@ -71,3 +71,15 @@ Build and run using Docker:
 docker build -t pharos-api .
 docker run -p 8000:8000 --env-file .env pharos-api
 ```
+
+Reauthenticate to ECR
+aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 166810338829.dkr.ecr.us-east-2.amazonaws.com
+
+Rebuild the image
+docker build -t pharos-api .
+
+Tag the image again
+docker tag pharos-api:latest 166810338829.dkr.ecr.us-east-2.amazonaws.com/pharos-api:latest
+
+Push the image
+docker push 166810338829.dkr.ecr.us-east-2.amazonaws.com/pharos-api:latest

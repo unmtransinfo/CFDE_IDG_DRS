@@ -3,19 +3,12 @@ Ligand-related GraphQL queries for Pharos API
 Focused on basic ligand information and chemical properties
 """
 
-# Essential field selections for basic ligand information
-LIGAND_BASIC_FIELDS = """
-    name
-    description
-    isdrug
-    smiles
-    actcnt
-    targetCount
-    synonyms {
-        name
-        value
-    }
-"""
+from queries.field_definitions import (
+    TARGET_BASIC_FIELDS,
+    DISEASE_BASIC_FIELDS,
+    LIGAND_BASIC_FIELDS
+)
+
 
 # Core ligand queries
 GET_LIGAND_BASIC = """
@@ -49,12 +42,27 @@ query SearchLigandsAlternative($search_term: String!) {
 }
 """
 
+GET_LIGAND_WITH_TARGETS = f"""
+query GetLigandWithTargets($ligand_id: String!) {{
+    ligand(ligid: $ligand_id) {{
+        {LIGAND_BASIC_FIELDS}
+        activities {{
+            target {{
+                {TARGET_BASIC_FIELDS}
+            }}
+        }}
+    }}
+}}
+"""
+
 # Query registry - makes it easy to get queries by name
 LIGAND_QUERIES = {
     'basic': GET_LIGAND_BASIC,
     'search': SEARCH_LIGANDS_BASIC,
-    'search_alternative': SEARCH_LIGANDS_ALTERNATIVE
+    'search_alternative': SEARCH_LIGANDS_ALTERNATIVE,
+    'with_targets': GET_LIGAND_WITH_TARGETS  # Add this line
 }
+
 
 def get_ligand_query(query_name: str) -> str:
     """
@@ -273,3 +281,19 @@ if __name__ == "__main__":
     
     mapped = map_ligand_data_for_csv(sample_data)
     print("Mapped data:", mapped)
+
+
+
+# Essential field selections for basic ligand information
+# LIGAND_BASIC_FIELDS = """
+#     name
+#     description
+#     isdrug
+#     smiles
+#     actcnt
+#     targetCount
+#     synonyms {
+#         name
+#         value
+#     }
+# """

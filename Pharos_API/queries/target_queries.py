@@ -3,23 +3,14 @@ Target-related GraphQL queries for Pharos API
 Focused on basic target information and simple cross-relationships
 """
 
-# Essential field selections for basic target information
-TARGET_BASIC_FIELDS = """
-    name
-    sym
-    uniprot
-    description
-    tdl
-    fam
-    novelty
-"""
-
-# Disease information fields for cross-relationships  
-DISEASE_BASIC_FIELDS = """
-    name
-    mondoID
-    description
-"""
+from queries.field_definitions import (
+    TARGET_BASIC_FIELDS,
+    DISEASE_BASIC_FIELDS,
+    LIGAND_BASIC_FIELDS,
+    TARGET_DETAILED_FIELDS,
+    DISEASE_FULL_FIELDS,
+    LIGAND_DETAILED_FIELDS
+)
 
 # Core target queries
 GET_TARGET_BASIC = """
@@ -65,13 +56,27 @@ query GetTargetWithTopDiseases($gene_symbol: String!) {
 }
 """
 
+GET_TARGET_WITH_LIGANDS = f"""
+query GetTargetWithLigands($gene_symbol: String!, $top: Int!) {{
+    target(q: {{sym: $gene_symbol}}) {{
+        {TARGET_BASIC_FIELDS}
+        ligands(top: $top) {{
+            {LIGAND_BASIC_FIELDS}
+        }}
+    }}
+}}
+"""
+
 # Query registry - makes it easy to get queries by name
 TARGET_QUERIES = {
     'basic': GET_TARGET_BASIC,
     'search': SEARCH_TARGETS_BASIC,
     'with_diseases_count': GET_TARGET_WITH_DISEASES_COUNT,
-    'with_top_diseases': GET_TARGET_WITH_TOP_DISEASES
+    'with_top_diseases': GET_TARGET_WITH_TOP_DISEASES,
+    'with_ligands': GET_TARGET_WITH_LIGANDS
 }
+
+
 
 def get_target_query(query_name: str) -> str:
     """
@@ -206,3 +211,24 @@ if __name__ == "__main__":
     
     print("\nSample query:")
     print(get_target_query('basic'))
+
+
+
+
+# Essential field selections for basic target information
+# TARGET_BASIC_FIELDS = """
+#     name
+#     sym
+#     uniprot
+#     description
+#     tdl
+#     fam
+#     novelty
+# """
+
+# Disease information fields for cross-relationships  
+# DISEASE_BASIC_FIELDS = """
+#     name
+#     mondoID
+#     description
+# """

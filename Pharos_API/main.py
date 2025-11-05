@@ -20,8 +20,10 @@ DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
 from config import settings, validate_configuration
 from api.targets import router as targets_router
 from api.ligands import router as ligands_router
+from api.diseases import router as diseases_router
 from services.graphql_client import check_pharos_connection
 from services.ligand_service import check_ligand_service_health
+from services.disease_service import check_disease_service_health
 
 # Configure logging
 logging.basicConfig(
@@ -57,6 +59,7 @@ app.add_middleware(
 # Include routers
 app.include_router(targets_router)
 app.include_router(ligands_router)
+app.include_router(diseases_router)
 
 # Root endpoint
 @app.get("/", tags=["root"])
@@ -80,6 +83,13 @@ async def root():
                 "get_ligand": "/ligands/{ligand_id}",
                 "search_ligands": "/ligands?search=term",
                 "health_check": "/ligands/health"
+            },
+            "diseases": {
+                "get_disease": "/diseases/{disease_name}",
+                "get_disease_targets": "/diseases/{disease_name}/targets",
+                "get_by_mondo_id": "/diseases/mondo/{mondo_id}",
+                "search_diseases": "/diseases?search=term",
+                "health_check": "/diseases/health"
             }
         },
         "supported_formats": settings.supported_output_formats,
@@ -89,16 +99,6 @@ async def root():
             "pagination": "Use skip and limit parameters"
         }
     }
-
-
-# # Health check endpoint
-# @app.get("/health", tags=["monitoring"])
-# async def health_check():
-#     """
-#     Simple health check for App Runner
-#     """
-#     return {"status": "healthy"}
-
 
 # Health check endpoint
 @app.get("/health", tags=["monitoring"])
@@ -116,11 +116,15 @@ async def health_check():
         # Check ligand service
         ligand_status = await check_ligand_service_health()
         
+        # Check disease service
+        disease_status = await check_disease_service_health()
+        
         # Overall health status
         overall_healthy = (
             config_ok and 
             pharos_status.get("status") == "healthy" and
-            ligand_status.get("status") == "healthy"
+            ligand_status.get("status") == "healthy" and
+            disease_status.get("status") == "healthy"
         )
         
         return {
@@ -133,10 +137,11 @@ async def health_check():
                 "pharos_connection": pharos_status,
                 "target_service": "available",
                 "ligand_service": ligand_status.get("status"),
+                "disease_service": disease_status.get("status"),
                 "endpoints": {
                     "targets": "available",
                     "ligands": "available",
-                    "diseases": "planned"
+                    "diseases": "available"
                 }
             },
             "uptime_info": {
@@ -224,6 +229,50 @@ async def api_info():
                     },
                     "example": "/ligands?search=aspirin&limit=10&format=csv"
                 }
+            },
+            "diseases": {
+                "single_disease": {
+                    "url": "/diseases/{disease_name}",
+                    "method": "GET",
+                    "description": "Get disease information by name",
+                    "parameters": {
+                        "disease_name": "Disease name (e.g., asthma, diabetes)",
+                        "format": "Response format (json, csv, tsv)"
+                    },
+                    "example": "/diseases/asthma?format=csv"
+                },
+                "disease_targets": {
+                    "url": "/diseases/{disease_name}/targets",
+                    "method": "GET",
+                    "description": "Get disease with associated targets",
+                    "parameters": {
+                        "disease_name": "Disease name",
+                        "format": "Response format (json, csv, tsv)"
+                    },
+                    "example": "/diseases/asthma/targets?format=csv"
+                },
+                "by_mondo_id": {
+                    "url": "/diseases/mondo/{mondo_id}",
+                    "method": "GET",
+                    "description": "Get disease by MONDO identifier",
+                    "parameters": {
+                        "mondo_id": "MONDO ID (e.g., MONDO:0004979)",
+                        "format": "Response format (json, csv, tsv)"
+                    },
+                    "example": "/diseases/mondo/MONDO:0004979?format=csv"
+                },
+                "search_diseases": {
+                    "url": "/diseases",
+                    "method": "GET",
+                    "description": "Search diseases by keyword",
+                    "parameters": {
+                        "search": "Search term (required)",
+                        "skip": "Number of results to skip",
+                        "limit": "Maximum results (1-100)",
+                        "format": "Response format (json, csv, tsv)"
+                    },
+                    "example": "/diseases?search=cancer&limit=10&format=csv"
+                }
             }
         },
         "galaxy_integration": {
@@ -237,31 +286,11 @@ async def api_info():
             "max_page_size": settings.max_page_size
         },
         "development": {
-            "github": "https://github.com/your-repo/pharos-api-gateway",
+            "github": "https://github.com/unmtransinfo/CFDE_IDG_DRS",
             "documentation": "/docs",
             "openapi_spec": "/openapi.json"
         }
     }
-
-
-# @app.on_event("startup")
-# async def startup_event():
-#     logger.info("Starting Pharos API Gateway...")
-
-#     if not DEMO_MODE:
-#         # Only run these checks if NOT in demo mode
-#         if not validate_configuration():
-#             raise RuntimeError("Invalid configuration")
-        
-#         try:
-#             connection_status = await check_pharos_connection()
-#             if connection_status["status"] != "healthy":
-#                 logger.warning("Pharos connection degraded")
-#         except Exception as e:
-#             logger.error(f"Pharos connection failed: {e}")
-
-#     logger.info("Pharos API Gateway startup complete")
-
 
 # Startup event
 @app.on_event("startup")
@@ -339,7 +368,11 @@ async def not_found_handler(request, exc):
                 "/targets/{gene_symbol}",
                 "/targets?search=term",
                 "/ligands/{ligand_id}",
-                "/ligands?search=term"
+                "/ligands?search=term",
+                "/diseases/{disease_name}",
+                "/diseases/{disease_name}/targets",
+                "/diseases/mondo/{mondo_id}",
+                "/diseases?search=term"
             ],
             "timestamp": datetime.now().isoformat()
         }
@@ -359,7 +392,6 @@ if __name__ == "__main__":
     )
 
 
-
 # """
 # Pharos API Gateway - Main FastAPI Application
 # Connects Galaxy Project with Pharos GraphQL API for target, disease, and ligand data
@@ -376,10 +408,14 @@ if __name__ == "__main__":
 # # Add current directory to Python path
 # sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+# DEMO_MODE = os.getenv("DEMO_MODE", "false").lower() == "true"
+
 # # Import configuration and routers
 # from config import settings, validate_configuration
 # from api.targets import router as targets_router
+# from api.ligands import router as ligands_router
 # from services.graphql_client import check_pharos_connection
+# from services.ligand_service import check_ligand_service_health
 
 # # Configure logging
 # logging.basicConfig(
@@ -414,6 +450,7 @@ if __name__ == "__main__":
 
 # # Include routers
 # app.include_router(targets_router)
+# app.include_router(ligands_router)
 
 # # Root endpoint
 # @app.get("/", tags=["root"])
@@ -432,6 +469,11 @@ if __name__ == "__main__":
 #                 "get_target": "/targets/{gene_symbol}",
 #                 "search_targets": "/targets?search=term",
 #                 "health_check": "/targets/health"
+#             },
+#             "ligands": {
+#                 "get_ligand": "/ligands/{ligand_id}",
+#                 "search_ligands": "/ligands?search=term",
+#                 "health_check": "/ligands/health"
 #             }
 #         },
 #         "supported_formats": settings.supported_output_formats,
@@ -441,6 +483,16 @@ if __name__ == "__main__":
 #             "pagination": "Use skip and limit parameters"
 #         }
 #     }
+
+
+# # # Health check endpoint
+# # @app.get("/health", tags=["monitoring"])
+# # async def health_check():
+# #     """
+# #     Simple health check for App Runner
+# #     """
+# #     return {"status": "healthy"}
+
 
 # # Health check endpoint
 # @app.get("/health", tags=["monitoring"])
@@ -455,10 +507,14 @@ if __name__ == "__main__":
 #         # Check Pharos connection
 #         pharos_status = await check_pharos_connection()
         
+#         # Check ligand service
+#         ligand_status = await check_ligand_service_health()
+        
 #         # Overall health status
 #         overall_healthy = (
 #             config_ok and 
-#             pharos_status.get("status") == "healthy"
+#             pharos_status.get("status") == "healthy" and
+#             ligand_status.get("status") == "healthy"
 #         )
         
 #         return {
@@ -469,10 +525,12 @@ if __name__ == "__main__":
 #             "checks": {
 #                 "configuration": "ok" if config_ok else "error",
 #                 "pharos_connection": pharos_status,
+#                 "target_service": "available",
+#                 "ligand_service": ligand_status.get("status"),
 #                 "endpoints": {
 #                     "targets": "available",
-#                     "diseases": "development", 
-#                     "ligands": "planned"
+#                     "ligands": "available",
+#                     "diseases": "planned"
 #                 }
 #             },
 #             "uptime_info": {
@@ -536,6 +594,30 @@ if __name__ == "__main__":
 #                     },
 #                     "example": "/targets?search=kinase&limit=10&format=csv"
 #                 }
+#             },
+#             "ligands": {
+#                 "single_ligand": {
+#                     "url": "/ligands/{ligand_id}",
+#                     "method": "GET",
+#                     "description": "Get ligand information by identifier",
+#                     "parameters": {
+#                         "ligand_id": "Ligand identifier (e.g., haloperidol, aspirin)",
+#                         "format": "Response format (json, csv, tsv)"
+#                     },
+#                     "example": "/ligands/aspirin?format=csv"
+#                 },
+#                 "search_ligands": {
+#                     "url": "/ligands",
+#                     "method": "GET",
+#                     "description": "Search ligands by keyword",
+#                     "parameters": {
+#                         "search": "Search term (required)",
+#                         "skip": "Number of results to skip",
+#                         "limit": "Maximum results (1-100)",
+#                         "format": "Response format (json, csv, tsv)"
+#                     },
+#                     "example": "/ligands?search=aspirin&limit=10&format=csv"
+#                 }
 #             }
 #         },
 #         "galaxy_integration": {
@@ -554,6 +636,26 @@ if __name__ == "__main__":
 #             "openapi_spec": "/openapi.json"
 #         }
 #     }
+
+
+# # @app.on_event("startup")
+# # async def startup_event():
+# #     logger.info("Starting Pharos API Gateway...")
+
+# #     if not DEMO_MODE:
+# #         # Only run these checks if NOT in demo mode
+# #         if not validate_configuration():
+# #             raise RuntimeError("Invalid configuration")
+        
+# #         try:
+# #             connection_status = await check_pharos_connection()
+# #             if connection_status["status"] != "healthy":
+# #                 logger.warning("Pharos connection degraded")
+# #         except Exception as e:
+# #             logger.error(f"Pharos connection failed: {e}")
+
+# #     logger.info("Pharos API Gateway startup complete")
+
 
 # # Startup event
 # @app.on_event("startup")
@@ -629,7 +731,9 @@ if __name__ == "__main__":
 #                 "/info",
 #                 "/docs",
 #                 "/targets/{gene_symbol}",
-#                 "/targets?search=term"
+#                 "/targets?search=term",
+#                 "/ligands/{ligand_id}",
+#                 "/ligands?search=term"
 #             ],
 #             "timestamp": datetime.now().isoformat()
 #         }

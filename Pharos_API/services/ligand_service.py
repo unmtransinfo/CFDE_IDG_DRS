@@ -14,8 +14,9 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.graphql_client import query_pharos, PharosGraphQLError
 from queries.ligand_queries import get_ligand_query, validate_ligand_id, validate_ligand_search_term
 from schemas.responses import (
-    LigandResponse, LigandSearchResponse,
-    create_ligand_response, create_ligand_search_response
+    LigandResponse, LigandSearchResponse, LigandWithTargetsResponse, 
+    create_ligand_response, create_ligand_search_response,
+    LigandWithTargets, TargetBasic
 )
 
 # Set up logging
@@ -235,6 +236,160 @@ class LigandService:
                 limit=limit,
                 success=False,
                 message="An unexpected error occurred during search"
+            )
+        
+    @staticmethod
+    async def get_ligand_with_targets(ligand_id: str, max_targets: int = 10) -> LigandWithTargetsResponse:
+        """
+        Get ligand information with associated targets (proteins)
+        
+        Args:
+            ligand_id: Ligand identifier (name, ChEMBL ID, etc.)
+            max_targets: Maximum number of targets to return (default 10)
+            
+        Returns:
+            LigandWithTargetsResponse with ligand and target data
+        """
+        try:
+            # Validate and clean input
+            cleaned_id = validate_ligand_id(ligand_id)
+            
+            # Use the query from ligand_queries
+            from queries.ligand_queries import get_ligand_query
+            query = get_ligand_query('with_targets')
+            variables = {"ligand_id": cleaned_id}
+            
+            logger.info(f"Querying ligand with targets for: {cleaned_id}")
+            
+            # Execute GraphQL query
+            result = await query_pharos(query, variables)
+            
+            # Extract ligand and target data
+            ligand_data = None
+            targets_data = []
+            
+            if result.get('data') and result['data'].get('ligand'):
+                ligand_raw = result['data']['ligand']
+                
+                # Extract ChEMBL ID from synonyms
+                chembl_id = None
+                if ligand_raw.get('synonyms'):
+                    for syn in ligand_raw['synonyms']:
+                        value = syn.get('value', '')
+                        if value.startswith('CHEMBL'):
+                            chembl_id = value
+                            break
+                
+                # Extract basic ligand info
+                ligand_data = {
+                    'name': ligand_raw.get('name'),
+                    'description': ligand_raw.get('description'),
+                    'isdrug': ligand_raw.get('isdrug'),
+                    'smiles': ligand_raw.get('smiles'),
+                    'chembl_id': chembl_id,
+                    'actcnt': ligand_raw.get('actcnt'),
+                    'targetCount': ligand_raw.get('targetCount')
+                }
+                
+
+                # Extract target associations from activities
+                if ligand_raw.get('activities'):
+                    activities_raw = ligand_raw['activities'][:max_targets]  # Limit here
+                    seen_targets = set()  # Track unique targets
+                    for activity in activities_raw:
+                        if activity.get('target'):
+                            target = activity['target']
+                            target_key = target.get('uniprot')  # Use uniprot as unique key
+                            if target_key and target_key not in seen_targets:
+                                seen_targets.add(target_key)
+                                target_info = TargetBasic(
+                                    target_name=target.get('name'),
+                                    gene_symbol=target.get('sym'),
+                                    uniprot_id=target.get('uniprot'),
+                                    description=target.get('description'),
+                                    development_level=target.get('tdl'),
+                                    protein_family=target.get('fam'),
+                                    novelty_score=target.get('novelty')
+                                )
+                        targets_data.append(target_info)
+                        if len(targets_data) >= max_targets:
+                            break
+
+                # # Extract target associations
+                # if ligand_raw.get('targets'):
+                #     targets_raw = ligand_raw['targets']  # Already limited by top parameter
+                #     for target in targets_raw:
+                #         target_info = TargetBasic(
+                #             target_name=target.get('name'),
+                #             gene_symbol=target.get('sym'),
+                #             uniprot_id=target.get('uniprot'),
+                #             description=target.get('description'),
+                #             development_level=target.get('tdl'),
+                #             protein_family=target.get('fam'),
+                #             novelty_score=target.get('novelty')
+                #         )
+                #         targets_data.append(target_info)
+                
+                logger.info(f"Found ligand with {len(targets_data)} target associations")
+            else:
+                logger.warning(f"No ligand found for ID: {cleaned_id}")
+            
+            # Create response with ligand and target data
+            if ligand_data:
+                ligand_with_targets = LigandWithTargets(
+                    ligand_name=ligand_data.get('name'),
+                    description=ligand_data.get('description'),
+                    is_drug=ligand_data.get('isdrug'),
+                    smiles=ligand_data.get('smiles'),
+                    chembl_id=ligand_data.get('chembl_id'),
+                    activity_count=ligand_data.get('actcnt'),
+                    target_count=ligand_data.get('targetCount'),
+                    associated_targets=targets_data,
+                    target_count_actual=len(targets_data)
+                )
+                
+                return LigandWithTargetsResponse(
+                    success=True,
+                    message=f"Ligand found with {len(targets_data)} target associations",
+                    ligand_id_queried=cleaned_id,
+                    data=ligand_with_targets
+                )
+            else:
+                return LigandWithTargetsResponse(
+                    success=False,
+                    message="Ligand not found",
+                    ligand_id_queried=cleaned_id,
+                    data=None
+                )
+                
+        except ValueError as e:
+            # Input validation error
+            logger.error(f"Input validation error for ligand ID '{ligand_id}': {str(e)}")
+            return LigandWithTargetsResponse(
+                success=False,
+                message=f"Invalid ligand ID: {str(e)}",
+                ligand_id_queried=ligand_id,
+                data=None
+            )
+            
+        except PharosGraphQLError as e:
+            # Pharos API specific error
+            logger.error(f"Pharos API error for ligand ID '{ligand_id}': {str(e)}")
+            return LigandWithTargetsResponse(
+                success=False,
+                message=f"Pharos API error: {str(e)}",
+                ligand_id_queried=ligand_id,
+                data=None
+            )
+            
+        except Exception as e:
+            # Unexpected error
+            logger.error(f"Unexpected error for ligand ID '{ligand_id}': {str(e)}")
+            return LigandWithTargetsResponse(
+                success=False,
+                message="An unexpected error occurred while fetching ligand data",
+                ligand_id_queried=ligand_id,
+                data=None
             )
 
 # Convenience functions for direct use

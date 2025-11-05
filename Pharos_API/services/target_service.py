@@ -16,7 +16,7 @@ from queries.target_queries import get_target_query, validate_gene_symbol, valid
 from schemas.responses import (
     TargetResponse, TargetSearchResponse, TargetWithDiseasesResponse,
     create_target_response, create_search_response, create_error_response,
-    TargetWithDiseases, DiseaseBasic
+    TargetWithDiseases, DiseaseBasic, TargetWithLigands, LigandBasic, TargetWithLigandsResponse
 )
 
 # Set up logging
@@ -213,9 +213,9 @@ class TargetService:
             # Validate and clean input
             cleaned_symbol = validate_gene_symbol(gene_symbol)
             
-            # Use a simpler query that we know works for now
+            # Use a query with top parameter to limit disease results
             query = """
-            query GetTargetWithDiseases($gene_symbol: String!) {
+            query GetTargetWithDiseases($gene_symbol: String!, $top: Int!) {
                 target(q: {sym: $gene_symbol}) {
                     name
                     sym
@@ -224,15 +224,16 @@ class TargetService:
                     tdl
                     fam
                     novelty
-                    diseases {
+                    diseases(top: $top) {
                         name
                         mondoID
-                        description
+                        doDescription
+                        uniprotDescription
                     }
                 }
             }
             """
-            variables = {"gene_symbol": cleaned_symbol}
+            variables = {"gene_symbol": cleaned_symbol, "top": max_diseases}
             
             logger.info(f"Querying target with diseases for: {cleaned_symbol}")
             
@@ -259,12 +260,15 @@ class TargetService:
                 
                 # Extract disease associations
                 if target_raw.get('diseases'):
-                    diseases_raw = target_raw['diseases'][:max_diseases]  # Limit to max_diseases
+                    diseases_raw = target_raw['diseases']  # Already limited by top parameter
                     for disease in diseases_raw:
+                        # Get best available description
+                        description = disease.get('doDescription') or disease.get('uniprotDescription') or ""
+
                         disease_info = DiseaseBasic(
                             disease_name=disease.get('name'),
                             mondo_id=disease.get('mondoID'),
-                            description=disease.get('description')
+                            description=description
                         )
                         diseases_data.append(disease_info)
                 
@@ -324,6 +328,136 @@ class TargetService:
             # Unexpected error
             logger.error(f"Unexpected error for gene symbol '{gene_symbol}': {str(e)}")
             return TargetWithDiseasesResponse(
+                success=False,
+                message="An unexpected error occurred while fetching target data",
+                gene_symbol_queried=gene_symbol,
+                data=None
+            )
+    
+    @staticmethod
+    async def get_target_with_ligands(gene_symbol: str, max_ligands: int = 10) -> 'TargetWithLigandsResponse':
+        """
+        Get target information with associated ligands (drugs/compounds)
+        
+        Args:
+            gene_symbol: Gene symbol (e.g., EGFR, TP53)
+            max_ligands: Maximum number of ligands to return (default 10)
+            
+        Returns:
+            TargetWithLigandsResponse with target and ligand data
+        """
+        try:
+            # Validate and clean input
+            cleaned_symbol = validate_gene_symbol(gene_symbol)
+            
+            # Use the query from target_queries
+            from queries.target_queries import get_target_query
+            query = get_target_query('with_ligands')
+            variables = {"gene_symbol": cleaned_symbol, "top": max_ligands}
+            
+            logger.info(f"Querying target with ligands for: {cleaned_symbol}")
+            
+            # Execute GraphQL query
+            result = await query_pharos(query, variables)
+            
+            # Extract target and ligand data
+            target_data = None
+            ligands_data = []
+            
+            if result.get('data') and result['data'].get('target'):
+                target_raw = result['data']['target']
+                
+                # Extract basic target info
+                target_data = {
+                    'name': target_raw.get('name'),
+                    'sym': target_raw.get('sym'),
+                    'uniprot': target_raw.get('uniprot'),
+                    'description': target_raw.get('description'),
+                    'tdl': target_raw.get('tdl'),
+                    'fam': target_raw.get('fam'),
+                    'novelty': target_raw.get('novelty')
+                }
+                
+                # Extract ligand associations
+                if target_raw.get('ligands'):
+                    ligands_raw = target_raw['ligands']  # Already limited by top parameter
+                    for ligand in ligands_raw:
+                        # Extract ChEMBL ID from synonyms if available
+                        chembl_id = None
+                        if ligand.get('synonyms'):
+                            for syn in ligand['synonyms']:
+                                value = syn.get('value', '')
+                                if value.startswith('CHEMBL'):
+                                    chembl_id = value
+                                    break
+                        
+                        ligand_info = LigandBasic(
+                            ligand_name=ligand.get('name'),
+                            description=ligand.get('description'),
+                            is_drug=ligand.get('isdrug'),
+                            smiles=ligand.get('smiles'),
+                            chembl_id=chembl_id,
+                            activity_count=ligand.get('actcnt'),
+                            target_count=ligand.get('targetCount')
+                        )
+                        ligands_data.append(ligand_info)
+                
+                logger.info(f"Found target with {len(ligands_data)} ligand associations")
+            else:
+                logger.warning(f"No target found for gene symbol: {cleaned_symbol}")
+            
+            # Create response with target and ligand data
+            if target_data:
+                target_with_ligands = TargetWithLigands(
+                    target_name=target_data.get('name'),
+                    gene_symbol=target_data.get('sym'),
+                    uniprot_id=target_data.get('uniprot'),
+                    description=target_data.get('description'),
+                    development_level=target_data.get('tdl'),
+                    protein_family=target_data.get('fam'),
+                    novelty_score=target_data.get('novelty'),
+                    associated_ligands=ligands_data,
+                    ligand_count=len(ligands_data)
+                )
+                
+                return TargetWithLigandsResponse(
+                    success=True,
+                    message=f"Target found with {len(ligands_data)} ligand associations",
+                    gene_symbol_queried=cleaned_symbol,
+                    data=target_with_ligands
+                )
+            else:
+                return TargetWithLigandsResponse(
+                    success=False,
+                    message="Target not found",
+                    gene_symbol_queried=cleaned_symbol,
+                    data=None
+                )
+                
+        except ValueError as e:
+            # Input validation error
+            logger.error(f"Input validation error for gene symbol '{gene_symbol}': {str(e)}")
+            return TargetWithLigandsResponse(
+                success=False,
+                message=f"Invalid gene symbol: {str(e)}",
+                gene_symbol_queried=gene_symbol,
+                data=None
+            )
+            
+        except PharosGraphQLError as e:
+            # Pharos API specific error
+            logger.error(f"Pharos API error for gene symbol '{gene_symbol}': {str(e)}")
+            return TargetWithLigandsResponse(
+                success=False,
+                message=f"Pharos API error: {str(e)}",
+                gene_symbol_queried=gene_symbol,
+                data=None
+            )
+            
+        except Exception as e:
+            # Unexpected error
+            logger.error(f"Unexpected error for gene symbol '{gene_symbol}': {str(e)}")
+            return TargetWithLigandsResponse(
                 success=False,
                 message="An unexpected error occurred while fetching target data",
                 gene_symbol_queried=gene_symbol,
