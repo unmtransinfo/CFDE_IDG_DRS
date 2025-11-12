@@ -23,6 +23,7 @@ from schemas.responses import (
     DiseaseResponse, 
     DiseaseSearchResponse,
     DiseaseWithTargetsResponse,
+    DiseaseBatchResponse,
     create_disease_response, 
     create_disease_search_response,
     create_disease_with_targets_response
@@ -335,6 +336,78 @@ class DiseaseService:
                 success=False,
                 message="An unexpected error occurred during search"
             )
+
+    @staticmethod
+    async def get_diseases_batch(disease_names: List[str]) -> 'DiseaseBatchResponse':
+        """
+        Get multiple diseases in parallel
+        
+        Args:
+            disease_names: List of disease names to query
+            
+        Returns:
+            DiseaseBatchResponse with results for all disease names
+        """
+        import asyncio
+        from schemas.responses import DiseaseBatchResponse, DiseaseBatchItem
+        
+        logger.info(f"Processing batch request for {len(disease_names)} disease names")
+        
+        # Create tasks for parallel execution
+        tasks = []
+        for disease_name in disease_names:
+            task = DiseaseService.get_disease_basic(disease_name)
+            tasks.append(task)
+        
+        # Execute all queries in parallel
+        # return_exceptions=True ensures one failure doesn't break everything
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        batch_items = []
+        found_count = 0
+        not_found_count = 0
+        
+        for disease_name, result in zip(disease_names, results):
+            # Handle exceptions
+            if isinstance(result, Exception):
+                logger.error(f"Error querying {disease_name}: {str(result)}")
+                batch_items.append(DiseaseBatchItem(
+                    disease_name=disease_name,
+                    found=False,
+                    data=None,
+                    error=f"Error: {str(result)}"
+                ))
+                not_found_count += 1
+                continue
+            
+            # Handle normal responses
+            if result.success and result.data:
+                batch_items.append(DiseaseBatchItem(
+                    disease_name=disease_name,
+                    found=True,
+                    data=result.data,
+                    error=None
+                ))
+                found_count += 1
+            else:
+                batch_items.append(DiseaseBatchItem(
+                    disease_name=disease_name,
+                    found=False,
+                    data=None,
+                    error=result.message or "Disease not found"
+                ))
+                not_found_count += 1
+        
+        # Create batch response
+        return DiseaseBatchResponse(
+            success=True,
+            message=f"Processed {len(disease_names)} disease names: {found_count} found, {not_found_count} not found",
+            total_requested=len(disease_names),
+            total_found=found_count,
+            total_not_found=not_found_count,
+            results=batch_items
+        )
 
 # Convenience functions for direct use
 async def get_disease(disease_name: str) -> DiseaseResponse:

@@ -10,14 +10,17 @@ from fastapi import APIRouter, HTTPException, Query, Path
 from fastapi.responses import Response
 import csv
 import io
+import logging
 
 # Add parent directory to Python path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+logger = logging.getLogger(__name__)
 
 from services.target_service import TargetService, check_target_service_health
+from schemas.requests import TargetBatchRequest
 from schemas.responses import (
     TargetResponse, TargetSearchResponse, TargetWithDiseasesResponse, TargetWithLigandsResponse,
-    ErrorResponse
+    ErrorResponse, TargetBatchResponse
 )
 from config import settings
 
@@ -472,29 +475,6 @@ async def _format_target_ligands_as_csv(result: TargetWithLigandsResponse, forma
     )
 
 
-# Batch operations (future feature)
-@router.post("/batch")
-async def get_targets_batch():
-    """
-    Get multiple targets in a single request (future feature)
-    
-    **NOTE**: This endpoint will be implemented in future version
-    to support batch operations like: POST /targets/batch with 
-    body containing list of gene symbols.
-    """
-    raise HTTPException(
-        status_code=501,
-        detail={
-            "message": "Batch operations not yet implemented",
-            "planned_features": [
-                "Multiple gene symbols in single request",
-                "Bulk CSV export", 
-                "Galaxy workflow integration"
-            ],
-            "workaround": "Use individual requests for now"
-        }
-    )
-
 # Statistics endpoint for monitoring
 @router.get("/stats")
 async def get_target_stats():
@@ -517,5 +497,135 @@ async def get_target_stats():
                 "Success/error rates",
                 "Popular search terms"
             ]
+        }
+    )
+
+@router.post("/batch", response_model=TargetBatchResponse)
+async def get_targets_batch(
+    request: TargetBatchRequest
+):
+    """
+    Get multiple targets in a single batch request
+    
+    This endpoint allows querying multiple gene symbols at once, which is much more efficient
+    than making individual requests for each gene. Useful for Galaxy workflows processing
+    lists of genes from RNA-seq, GWAS, or other high-throughput analyses.
+    
+    **Example Request Body:**
+    ```json
+    {
+        "gene_symbols": ["EGFR", "TP53", "BRAF", "KRAS"],
+        "format": "json"
+    }
+    ```
+    
+    **Features:**
+    - Queries up to 100 gene symbols per request
+    - Parallel processing for fast results
+    - Returns both successful and failed queries
+    - Supports JSON, CSV, and TSV output formats
+    
+    **Use Cases:**
+    - Process gene lists from differential expression analysis
+    - Bulk lookup of target information
+    - Galaxy workflow integration for high-throughput data
+    
+    Args:
+        request: TargetBatchRequest containing list of gene symbols and format
+        
+    Returns:
+        TargetBatchResponse with results for all queried gene symbols
+        
+    Raises:
+        HTTPException: If request validation fails (e.g., too many genes, invalid format)
+    """
+    try:
+        # Call the batch service method
+        result = await TargetService.get_targets_batch(request.gene_symbols)
+        
+        # Handle CSV/TSV format if requested
+        if request.format.lower() in ["csv", "tsv"]:
+            return await _format_batch_targets_as_csv(result, request.format.lower())
+        
+        # Return JSON response
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in batch targets endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error processing batch request")
+    
+
+async def _format_batch_targets_as_csv(result: TargetBatchResponse, format_type: str) -> Response:
+    """
+    Convert batch target response to CSV/TSV format
+    
+    Args:
+        result: TargetBatchResponse object
+        format_type: "csv" or "tsv"
+        
+    Returns:
+        Response with CSV/TSV content
+    """
+    delimiter = "," if format_type == "csv" else "\t"
+    output = io.StringIO()
+    
+    # CSV headers
+    headers = [
+        "Gene_Symbol",
+        "Found",
+        "Target_Name",
+        "UniProt_ID",
+        "Description",
+        "Development_Level",
+        "Protein_Family",
+        "Novelty_Score",
+        "Error"
+    ]
+    
+    writer = csv.writer(output, delimiter=delimiter)
+    writer.writerow(headers)
+    
+    # Write data rows
+    for item in result.results:
+        if item.found and item.data:
+            # Successful result
+            writer.writerow([
+                item.gene_symbol,
+                "true",
+                item.data.target_name or "",
+                item.data.uniprot_id or "",
+                (item.data.description[:100] + "...") if item.data.description and len(item.data.description) > 100 else (item.data.description or ""),
+                item.data.development_level or "",
+                item.data.protein_family or "",
+                str(item.data.novelty_score) if item.data.novelty_score is not None else "",
+                ""
+            ])
+        else:
+            # Failed result
+            writer.writerow([
+                item.gene_symbol,
+                "false",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                item.error or "Not found"
+            ])
+    
+    # Create response
+    content = output.getvalue()
+    extension = format_type
+    filename = f"targets_batch_{len(result.results)}_items.{extension}"
+    
+    return Response(
+        content=content,
+        media_type=f"text/{format_type}",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": f"text/{format_type}; charset=utf-8"
         }
     )

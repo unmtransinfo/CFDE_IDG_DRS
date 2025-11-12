@@ -77,12 +77,18 @@ async def root():
             "targets": {
                 "get_target": "/targets/{gene_symbol}",
                 "search_targets": "/targets?search=term",
+                "batch_targets": "/targets/batch",
+                "target_diseases": "/targets/{gene_symbol}/diseases",
+                "target_ligands": "/targets/{gene_symbol}/ligands",
+                "batch_diseases": "/diseases/batch",
                 "health_check": "/targets/health"
             },
             "ligands": {
-                "get_ligand": "/ligands/{ligand_id}",
-                "search_ligands": "/ligands?search=term",
-                "health_check": "/ligands/health"
+            "get_ligand": "/ligands/{ligand_id}",
+            "search_ligands": "/ligands?search=term",
+            "batch_ligands": "/ligands/batch",  # ADD THIS LINE
+            "ligand_targets": "/ligands/{ligand_id}/targets",  # ADD THIS LINE
+            "health_check": "/ligands/health"
             },
             "diseases": {
                 "get_disease": "/diseases/{disease_name}",
@@ -204,6 +210,22 @@ async def api_info():
                         "format": "Response format (json, csv, tsv)"
                     },
                     "example": "/targets?search=kinase&limit=10&format=csv"
+                },
+                "batch_targets": {
+                    "url": "/targets/batch",
+                    "method": "POST",
+                    "description": "Get multiple targets in one request",
+                    "body": {
+                        "gene_symbols": "List of gene symbols (max 100)",
+                        "format": "Response format (json, csv, tsv)"
+                    },
+                    "example": {
+                        "url": "/targets/batch",
+                        "body": {
+                            "gene_symbols": ["EGFR", "TP53", "BRAF"],
+                            "format": "json"
+                        }
+                    }
                 }
             },
             "ligands": {
@@ -228,6 +250,22 @@ async def api_info():
                         "format": "Response format (json, csv, tsv)"
                     },
                     "example": "/ligands?search=aspirin&limit=10&format=csv"
+                },
+                "batch_ligands": {
+                    "url": "/ligands/batch",
+                    "method": "POST",
+                    "description": "Get multiple ligands in one request",
+                    "body": {
+                        "ligand_ids": "List of ligand identifiers (max 100)",
+                        "format": "Response format (json, csv, tsv)"
+                    },
+                    "example": {
+                        "url": "/ligands/batch",
+                        "body": {
+                            "ligand_ids": ["haloperidol", "aspirin", "imatinib"],
+                            "format": "json"
+                        }
+                    }
                 }
             },
             "diseases": {
@@ -272,6 +310,22 @@ async def api_info():
                         "format": "Response format (json, csv, tsv)"
                     },
                     "example": "/diseases?search=cancer&limit=10&format=csv"
+                },
+                "batch_diseases": {
+                    "url": "/diseases/batch",
+                    "method": "POST",
+                    "description": "Get multiple diseases in one request",
+                    "body": {
+                        "disease_names": "List of disease names (max 100)",
+                        "format": "Response format (json, csv, tsv)"
+                    },
+                    "example": {
+                        "url": "/diseases/batch",
+                        "body": {
+                            "disease_names": ["asthma", "diabetes", "cancer"],
+                            "format": "json"
+                        }
+                    }
                 }
             }
         },
@@ -279,7 +333,7 @@ async def api_info():
             "csv_export": "All endpoints support CSV export with ?format=csv",
             "pagination": "Use skip/limit parameters for large datasets",
             "error_handling": "Consistent error responses with HTTP status codes",
-            "batch_operations": "Planned for future version"
+            "batch_operations": "Available at /targets/batch, /ligands/batch, /diseases/batch"
         },
         "rate_limits": {
             "requests_per_minute": settings.rate_limit_per_minute,
@@ -291,6 +345,7 @@ async def api_info():
             "openapi_spec": "/openapi.json"
         }
     }
+
 
 # Startup event
 @app.on_event("startup")

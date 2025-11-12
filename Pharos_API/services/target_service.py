@@ -16,7 +16,8 @@ from queries.target_queries import get_target_query, validate_gene_symbol, valid
 from schemas.responses import (
     TargetResponse, TargetSearchResponse, TargetWithDiseasesResponse,
     create_target_response, create_search_response, create_error_response,
-    TargetWithDiseases, DiseaseBasic, TargetWithLigands, LigandBasic, TargetWithLigandsResponse
+    TargetWithDiseases, DiseaseBasic, TargetWithLigands, LigandBasic, TargetWithLigandsResponse,
+    TargetBatchResponse, TargetBatchItem  # Add TargetBatchItem here
 )
 
 # Set up logging
@@ -463,6 +464,76 @@ class TargetService:
                 gene_symbol_queried=gene_symbol,
                 data=None
             )
+
+    @staticmethod
+    async def get_targets_batch(gene_symbols: List[str]) -> 'TargetBatchResponse':
+        """
+        Get multiple targets in parallel
+        
+        Args:
+            gene_symbols: List of gene symbols to query
+            
+        Returns:
+            TargetBatchResponse with results for all gene symbols
+        """
+        import asyncio
+        
+        logger.info(f"Processing batch request for {len(gene_symbols)} gene symbols")
+        
+        # Create tasks for parallel execution
+        tasks = []
+        for gene_symbol in gene_symbols:
+            task = TargetService.get_target_basic(gene_symbol)
+            tasks.append(task)
+        
+        # Execute all queries in parallel
+        # return_exceptions=True ensures one failure doesn't break everything
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        batch_items = []
+        found_count = 0
+        not_found_count = 0
+        
+        for gene_symbol, result in zip(gene_symbols, results):
+            # Handle exceptions
+            if isinstance(result, Exception):
+                logger.error(f"Error querying {gene_symbol}: {str(result)}")
+                batch_items.append(TargetBatchItem(
+                    gene_symbol=gene_symbol,
+                    found=False,
+                    data=None,
+                    error=f"Error: {str(result)}"
+                ))
+                not_found_count += 1
+                continue
+            
+            # Handle normal responses
+            if result.success and result.data:
+                batch_items.append(TargetBatchItem(
+                    gene_symbol=gene_symbol,
+                    found=True,
+                    data=result.data,
+                    error=None
+                ))
+                found_count += 1
+            else:
+                batch_items.append(TargetBatchItem(
+                    gene_symbol=gene_symbol,
+                    found=False,
+                    data=None,
+                    error=result.message or "Target not found"
+                ))
+                not_found_count += 1
+        
+        return TargetBatchResponse(
+            success=True,
+            message=f"Processed {len(gene_symbols)} gene symbols: {found_count} found, {not_found_count} not found",
+            total_requested=len(gene_symbols),
+            total_found=found_count,
+            total_not_found=not_found_count,
+            results=batch_items
+        )
 
 # Convenience functions for direct use
 async def get_target(gene_symbol: str) -> TargetResponse:

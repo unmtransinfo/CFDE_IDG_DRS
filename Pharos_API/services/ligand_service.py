@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from services.graphql_client import query_pharos, PharosGraphQLError
 from queries.ligand_queries import get_ligand_query, validate_ligand_id, validate_ligand_search_term
 from schemas.responses import (
-    LigandResponse, LigandSearchResponse, LigandWithTargetsResponse, 
+    LigandResponse, LigandSearchResponse, LigandWithTargetsResponse, LigandBatchResponse,
     create_ligand_response, create_ligand_search_response,
     LigandWithTargets, TargetBasic
 )
@@ -391,6 +391,79 @@ class LigandService:
                 ligand_id_queried=ligand_id,
                 data=None
             )
+        
+    
+    @staticmethod
+    async def get_ligands_batch(ligand_ids: List[str]) -> 'LigandBatchResponse':
+        """
+        Get multiple ligands in parallel
+        
+        Args:
+            ligand_ids: List of ligand identifiers to query
+            
+        Returns:
+            LigandBatchResponse with results for all ligand IDs
+        """
+        import asyncio
+        from schemas.responses import LigandBatchResponse, LigandBatchItem
+        
+        logger.info(f"Processing batch request for {len(ligand_ids)} ligand IDs")
+        
+        # Create tasks for parallel execution
+        tasks = []
+        for ligand_id in ligand_ids:
+            task = LigandService.get_ligand_basic(ligand_id)
+            tasks.append(task)
+        
+        # Execute all queries in parallel
+        # return_exceptions=True ensures one failure doesn't break everything
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        
+        # Process results
+        batch_items = []
+        found_count = 0
+        not_found_count = 0
+        
+        for ligand_id, result in zip(ligand_ids, results):
+            # Handle exceptions
+            if isinstance(result, Exception):
+                logger.error(f"Error querying {ligand_id}: {str(result)}")
+                batch_items.append(LigandBatchItem(
+                    ligand_id=ligand_id,
+                    found=False,
+                    data=None,
+                    error=f"Error: {str(result)}"
+                ))
+                not_found_count += 1
+                continue
+            
+            # Handle normal responses
+            if result.success and result.data:
+                batch_items.append(LigandBatchItem(
+                    ligand_id=ligand_id,
+                    found=True,
+                    data=result.data,
+                    error=None
+                ))
+                found_count += 1
+            else:
+                batch_items.append(LigandBatchItem(
+                    ligand_id=ligand_id,
+                    found=False,
+                    data=None,
+                    error=result.message or "Ligand not found"
+                ))
+                not_found_count += 1
+        
+        # Create batch response
+        return LigandBatchResponse(
+            success=True,
+            message=f"Processed {len(ligand_ids)} ligand IDs: {found_count} found, {not_found_count} not found",
+            total_requested=len(ligand_ids),
+            total_found=found_count,
+            total_not_found=not_found_count,
+            results=batch_items
+        )
 
 # Convenience functions for direct use
 async def get_ligand(ligand_id: str) -> LigandResponse:

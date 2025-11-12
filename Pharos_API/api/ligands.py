@@ -11,15 +11,20 @@ from fastapi.responses import Response
 import csv
 import io
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 # Add parent directory to Python path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from services.ligand_service import LigandService, check_ligand_service_health
 from schemas.responses import (
     LigandResponse, LigandSearchResponse, LigandWithTargetsResponse,
-    ErrorResponse
+    ErrorResponse, LigandBatchResponse, LigandWithTargets
 )
 from config import settings
+from schemas.requests import LigandBatchRequest
 
 # Create router for ligand endpoints
 router = APIRouter(
@@ -300,29 +305,61 @@ async def _format_search_results_as_csv(result: LigandSearchResponse, format_typ
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
-# Batch operations (future feature)
-@router.post("/batch")
-async def get_ligands_batch():
+@router.post("/batch", response_model=LigandBatchResponse)
+async def get_ligands_batch(
+    request: LigandBatchRequest
+):
     """
-    Get multiple ligands in a single request (future feature)
+    Get multiple ligands in a single batch request
     
-    **NOTE**: This endpoint will be implemented in future version
-    to support batch operations like: POST /ligands/batch with 
-    body containing list of ligand identifiers.
+    This endpoint allows querying multiple ligand identifiers at once, which is much more efficient
+    than making individual requests for each ligand. Useful for Galaxy workflows processing
+    lists of compounds from chemical screens, drug databases, or other high-throughput analyses.
+    
+    **Example Request Body:**
+    ```json
+    {
+        "ligand_ids": ["haloperidol", "aspirin", "imatinib"],
+        "format": "json"
+    }
+    ```
+    
+    **Features:**
+    - Queries up to 100 ligand IDs per request
+    - Parallel processing for fast results
+    - Returns both successful and failed queries
+    - Supports JSON, CSV, and TSV output formats
+    
+    **Use Cases:**
+    - Process compound lists from chemical screens
+    - Bulk lookup of drug information
+    - Galaxy workflow integration for high-throughput data
+    
+    Args:
+        request: LigandBatchRequest containing list of ligand IDs and format
+        
+    Returns:
+        LigandBatchResponse with results for all queried ligand IDs
+        
+    Raises:
+        HTTPException: If request validation fails (e.g., too many ligands, invalid format)
     """
-    raise HTTPException(
-        status_code=501,
-        detail={
-            "message": "Batch operations not yet implemented",
-            "planned_features": [
-                "Multiple ligands in single request",
-                "Bulk CSV export", 
-                "Galaxy workflow integration",
-                "Chemical structure-based search"
-            ],
-            "workaround": "Use individual requests for now"
-        }
-    )
+    try:
+        # Call the batch service method
+        result = await LigandService.get_ligands_batch(request.ligand_ids)
+        
+        # Handle CSV/TSV format if requested
+        if request.format.lower() in ["csv", "tsv"]:
+            return await _format_batch_ligands_as_csv(result, request.format.lower())
+        
+        # Return JSON response
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in batch ligands endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error processing batch request")
 
 # Drug filtering endpoint
 @router.get("/drugs")
@@ -406,4 +443,80 @@ async def _format_ligand_targets_as_csv(result: LigandWithTargetsResponse, forma
         content=content,
         media_type=media_type,
         headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+async def _format_batch_ligands_as_csv(result: LigandBatchResponse, format_type: str) -> Response:
+    """
+    Convert batch ligand response to CSV/TSV format
+    
+    Args:
+        result: LigandBatchResponse object
+        format_type: "csv" or "tsv"
+        
+    Returns:
+        Response with CSV/TSV content
+    """
+    delimiter = "," if format_type == "csv" else "\t"
+    output = io.StringIO()
+    
+    # CSV headers
+    headers = [
+        "Ligand_ID",
+        "Found",
+        "Ligand_Name",
+        "ChEMBL_ID",
+        "Is_Drug",
+        "SMILES",
+        "Description",
+        "Activity_Count",
+        "Target_Count",
+        "Error"
+    ]
+    
+    writer = csv.writer(output, delimiter=delimiter)
+    writer.writerow(headers)
+    
+    # Write data rows
+    for item in result.results:
+        if item.found and item.data:
+            # Successful result
+            writer.writerow([
+                item.ligand_id,
+                "true",
+                item.data.ligand_name or "",
+                item.data.chembl_id or "",
+                "Yes" if item.data.is_drug else "No" if item.data.is_drug is False else "Unknown",
+                (item.data.smiles[:50] + "...") if item.data.smiles and len(item.data.smiles) > 50 else (item.data.smiles or ""),
+                (item.data.description[:100] + "...") if item.data.description and len(item.data.description) > 100 else (item.data.description or ""),
+                str(item.data.activity_count) if item.data.activity_count is not None else "",
+                str(item.data.target_count) if item.data.target_count is not None else "",
+                ""
+            ])
+        else:
+            # Failed result
+            writer.writerow([
+                item.ligand_id,
+                "false",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                item.error or "Not found"
+            ])
+    
+    # Create response
+    content = output.getvalue()
+    extension = format_type
+    filename = f"ligands_batch_{len(result.results)}_items.{extension}"
+    
+    return Response(
+        content=content,
+        media_type=f"text/{format_type}",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": f"text/{format_type}; charset=utf-8"
+        }
     )

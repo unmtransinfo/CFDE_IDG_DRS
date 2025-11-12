@@ -8,19 +8,23 @@ import os
 from typing import Optional, List
 from fastapi import APIRouter, HTTPException, Query, Path
 from fastapi.responses import Response
+import logging
 import csv
 import io
 
 # Add parent directory to Python path for imports
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+logger = logging.getLogger(__name__)
 
 from services.disease_service import DiseaseService, check_disease_service_health
 from schemas.responses import (
     DiseaseResponse, 
     DiseaseSearchResponse,
     DiseaseWithTargetsResponse,
+    DiseaseBatchResponse,
     ErrorResponse
 )
+from schemas.requests import DiseaseBatchRequest 
 from config import settings
 
 # Create router for disease endpoints
@@ -333,6 +337,62 @@ async def search_diseases(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
+    
+@router.post("/batch", response_model=DiseaseBatchResponse)
+async def get_diseases_batch(
+    request: DiseaseBatchRequest
+):
+    """
+    Get multiple diseases in a single batch request
+    
+    This endpoint allows querying multiple disease names at once, which is much more efficient
+    than making individual requests for each disease. Useful for Galaxy workflows processing
+    lists of diseases from GWAS studies, clinical trials, or other biomedical analyses.
+    
+    **Example Request Body:**
+    ```json
+    {
+        "disease_names": ["asthma", "diabetes mellitus", "alzheimer disease"],
+        "format": "json"
+    }
+    ```
+    
+    **Features:**
+    - Queries up to 100 disease names per request
+    - Parallel processing for fast results
+    - Returns both successful and failed queries
+    - Supports JSON, CSV, and TSV output formats
+    
+    **Use Cases:**
+    - Process disease lists from GWAS studies
+    - Bulk lookup of disease information
+    - Galaxy workflow integration for phenotype analysis
+    
+    Args:
+        request: DiseaseBatchRequest containing list of disease names and format
+        
+    Returns:
+        DiseaseBatchResponse with results for all queried disease names
+        
+    Raises:
+        HTTPException: If request validation fails (e.g., too many diseases, invalid format)
+    """
+    try:
+        # Call the batch service method
+        result = await DiseaseService.get_diseases_batch(request.disease_names)
+        
+        # Handle CSV/TSV format if requested
+        if request.format.lower() in ["csv", "tsv"]:
+            return await _format_batch_diseases_as_csv(result, request.format.lower())
+        
+        # Return JSON response
+        return result
+        
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Unexpected error in batch diseases endpoint: {str(e)}")
+        raise HTTPException(status_code=500, detail="Internal server error processing batch request")
 
 @router.get("/mondo/{mondo_id}", response_model=DiseaseResponse)
 async def get_disease_by_mondo_id(
@@ -424,6 +484,85 @@ async def get_disease_by_mondo_id(
             status_code=500,
             detail=f"Internal server error: {str(e)}"
         )
+    
+async def _format_batch_diseases_as_csv(result: DiseaseBatchResponse, format_type: str) -> Response:
+    """
+    Convert batch disease response to CSV/TSV format
+    
+    Args:
+        result: DiseaseBatchResponse object
+        format_type: "csv" or "tsv"
+        
+    Returns:
+        Response with CSV/TSV content
+    """
+    delimiter = "," if format_type == "csv" else "\t"
+    output = io.StringIO()
+    
+    # CSV headers
+    headers = [
+        "Disease_Name",
+        "Found",
+        "MONDO_ID",
+        "UniProt_Description",
+        "DO_Description",
+        "MONDO_Description",
+        "Association_Count",
+        "Direct_Association_Count",
+        "Is_Rare_Disease",
+        "Datasource_Count",
+        "Error"
+    ]
+    
+    writer = csv.writer(output, delimiter=delimiter)
+    writer.writerow(headers)
+    
+    # Write data rows
+    for item in result.results:
+        if item.found and item.data:
+            # Successful result
+            writer.writerow([
+                item.disease_name,
+                "true",
+                item.data.mondo_id or "",
+                (item.data.uniprot_description[:100] + "...") if item.data.uniprot_description and len(item.data.uniprot_description) > 100 else (item.data.uniprot_description or ""),
+                (item.data.do_description[:100] + "...") if item.data.do_description and len(item.data.do_description) > 100 else (item.data.do_description or ""),
+                (item.data.mondo_description[:100] + "...") if item.data.mondo_description and len(item.data.mondo_description) > 100 else (item.data.mondo_description or ""),
+                str(item.data.association_count) if item.data.association_count is not None else "",
+                str(item.data.direct_association_count) if item.data.direct_association_count is not None else "",
+                "Yes" if item.data.is_rare else "No" if item.data.is_rare is False else "Unknown",
+                str(item.data.datasource_count) if item.data.datasource_count is not None else "",
+                ""
+            ])
+        else:
+            # Failed result
+            writer.writerow([
+                item.disease_name,
+                "false",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                "",
+                item.error or "Not found"
+            ])
+    
+    # Create response
+    content = output.getvalue()
+    extension = format_type
+    filename = f"diseases_batch_{len(result.results)}_items.{extension}"
+    
+    return Response(
+        content=content,
+        media_type=f"text/{format_type}",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}",
+            "Content-Type": f"text/{format_type}; charset=utf-8"
+        }
+    )
 
 # CSV column information endpoint
 @router.get("/info/csv-columns")

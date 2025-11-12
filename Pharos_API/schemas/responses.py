@@ -955,3 +955,65 @@ if __name__ == "__main__":
     ligand_response = create_ligand_response(sample_ligand_data, 'haloperidol')
     print("Sample ligand response:")
     print(ligand_response.model_dump_json(indent=2))
+
+
+
+# ==========================================
+# BATCH RESPONSE MODELS (for Phase 2)
+# ==========================================
+
+class TargetBatchItem(BaseModel):
+    """Single item in a batch target response"""
+    gene_symbol: str = Field(..., description="The gene symbol that was queried")
+    found: bool = Field(..., description="Whether the target was found in Pharos")
+    data: Optional[TargetBasic] = Field(None, description="Target data if found, null if not found")
+    error: Optional[str] = Field(None, description="Error message if target was not found")
+
+
+class TargetBatchResponse(BaseModel):
+    """Response model for batch target queries"""
+    success: bool = Field(..., description="Whether the batch request was processed successfully")
+    message: str = Field(..., description="Human-readable summary of the batch operation")
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat(), description="ISO 8601 timestamp")
+    total_requested: int = Field(..., description="Total number of gene symbols requested")
+    total_found: int = Field(..., description="Number of targets successfully found")
+    total_not_found: int = Field(..., description="Number of targets not found")
+    results: List[TargetBatchItem] = Field(..., description="Array of results for each gene symbol")
+
+
+class LigandBatchItem(BaseModel):
+    """Single item in a batch ligand response"""
+    ligand_id: str = Field(..., description="The ligand ID that was queried")
+    found: bool = Field(..., description="Whether the ligand was found in Pharos")
+    data: Optional[LigandBasic] = Field(None, description="Ligand data if found, null if not found")
+    error: Optional[str] = Field(None, description="Error message if ligand was not found")
+
+
+class LigandBatchResponse(BaseModel):
+    """Response model for batch ligand queries"""
+    success: bool = Field(..., description="Whether the batch request was processed successfully")
+    message: str = Field(..., description="Human-readable summary of the batch operation")
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat(), description="ISO 8601 timestamp")
+    total_requested: int = Field(..., description="Total number of ligand IDs requested")
+    total_found: int = Field(..., description="Number of ligands successfully found")
+    total_not_found: int = Field(..., description="Number of ligands not found")
+    results: List[LigandBatchItem] = Field(..., description="Array of results for each ligand ID")
+
+
+class DiseaseBatchItem(BaseModel):
+    """Single item in a batch disease response"""
+    disease_name: str = Field(..., description="The disease name that was queried")
+    found: bool = Field(..., description="Whether the disease was found in Pharos")
+    data: Optional[DiseaseBasic] = Field(None, description="Disease data if found, null if not found")
+    error: Optional[str] = Field(None, description="Error message if disease was not found")
+
+
+class DiseaseBatchResponse(BaseModel):
+    """Response model for batch disease queries"""
+    success: bool = Field(..., description="Whether the batch request was processed successfully")
+    message: str = Field(..., description="Human-readable summary of the batch operation")
+    timestamp: str = Field(default_factory=lambda: datetime.now().isoformat(), description="ISO 8601 timestamp")
+    total_requested: int = Field(..., description="Total number of disease names requested")
+    total_found: int = Field(..., description="Number of diseases successfully found")
+    total_not_found: int = Field(..., description="Number of diseases not found")
+    results: List[DiseaseBatchItem] = Field(..., description="Array of results for each disease name")
