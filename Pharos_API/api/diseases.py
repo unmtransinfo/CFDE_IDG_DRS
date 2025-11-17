@@ -499,14 +499,12 @@ async def _format_batch_diseases_as_csv(result: DiseaseBatchResponse, format_typ
     delimiter = "," if format_type == "csv" else "\t"
     output = io.StringIO()
     
-    # CSV headers
+    # CSV headers - SIMPLIFIED
     headers = [
         "Disease_Name",
         "Found",
         "MONDO_ID",
-        "UniProt_Description",
-        "DO_Description",
-        "MONDO_Description",
+        "Description",  # ← SINGLE DESCRIPTION FIELD
         "Association_Count",
         "Direct_Association_Count",
         "Is_Rare_Disease",
@@ -525,9 +523,7 @@ async def _format_batch_diseases_as_csv(result: DiseaseBatchResponse, format_typ
                 item.disease_name,
                 "true",
                 item.data.mondo_id or "",
-                (item.data.uniprot_description[:100] + "...") if item.data.uniprot_description and len(item.data.uniprot_description) > 100 else (item.data.uniprot_description or ""),
-                (item.data.do_description[:100] + "...") if item.data.do_description and len(item.data.do_description) > 100 else (item.data.do_description or ""),
-                (item.data.mondo_description[:100] + "...") if item.data.mondo_description and len(item.data.mondo_description) > 100 else (item.data.mondo_description or ""),
+                (item.data.description[:150] + "...") if item.data.description and len(item.data.description) > 150 else (item.data.description or ""),  # ← ONLY description
                 str(item.data.association_count) if item.data.association_count is not None else "",
                 str(item.data.direct_association_count) if item.data.direct_association_count is not None else "",
                 "Yes" if item.data.is_rare else "No" if item.data.is_rare is False else "Unknown",
@@ -535,12 +531,10 @@ async def _format_batch_diseases_as_csv(result: DiseaseBatchResponse, format_typ
                 ""
             ])
         else:
-            # Failed result
+            # Failed result - 9 columns total
             writer.writerow([
                 item.disease_name,
                 "false",
-                "",
-                "",
                 "",
                 "",
                 "",
@@ -563,6 +557,85 @@ async def _format_batch_diseases_as_csv(result: DiseaseBatchResponse, format_typ
             "Content-Type": f"text/{format_type}; charset=utf-8"
         }
     )
+    
+# async def _format_batch_diseases_as_csv(result: DiseaseBatchResponse, format_type: str) -> Response:
+#     """
+#     Convert batch disease response to CSV/TSV format
+    
+#     Args:
+#         result: DiseaseBatchResponse object
+#         format_type: "csv" or "tsv"
+        
+#     Returns:
+#         Response with CSV/TSV content
+#     """
+#     delimiter = "," if format_type == "csv" else "\t"
+#     output = io.StringIO()
+    
+#     # CSV headers
+#     headers = [
+#         "Disease_Name",
+#         "Found",
+#         "MONDO_ID",
+#         "UniProt_Description",
+#         "DO_Description",
+#         "MONDO_Description",
+#         "Association_Count",
+#         "Direct_Association_Count",
+#         "Is_Rare_Disease",
+#         "Datasource_Count",
+#         "Error"
+#     ]
+    
+#     writer = csv.writer(output, delimiter=delimiter)
+#     writer.writerow(headers)
+    
+#     # Write data rows
+#     for item in result.results:
+#         if item.found and item.data:
+#             # Successful result
+#             writer.writerow([
+#                 item.disease_name,
+#                 "true",
+#                 item.data.mondo_id or "",
+#                 (item.data.uniprot_description[:100] + "...") if item.data.uniprot_description and len(item.data.uniprot_description) > 100 else (item.data.uniprot_description or ""),
+#                 (item.data.do_description[:100] + "...") if item.data.do_description and len(item.data.do_description) > 100 else (item.data.do_description or ""),
+#                 (item.data.mondo_description[:100] + "...") if item.data.mondo_description and len(item.data.mondo_description) > 100 else (item.data.mondo_description or ""),
+#                 str(item.data.association_count) if item.data.association_count is not None else "",
+#                 str(item.data.direct_association_count) if item.data.direct_association_count is not None else "",
+#                 "Yes" if item.data.is_rare else "No" if item.data.is_rare is False else "Unknown",
+#                 str(item.data.datasource_count) if item.data.datasource_count is not None else "",
+#                 ""
+#             ])
+#         else:
+#             # Failed result
+#             writer.writerow([
+#                 item.disease_name,
+#                 "false",
+#                 "",
+#                 "",
+#                 "",
+#                 "",
+#                 "",
+#                 "",
+#                 "",
+#                 "",
+#                 item.error or "Not found"
+#             ])
+    
+#     # Create response
+#     content = output.getvalue()
+#     extension = format_type
+#     filename = f"diseases_batch_{len(result.results)}_items.{extension}"
+    
+#     return Response(
+#         content=content,
+#         media_type=f"text/{format_type}",
+#         headers={
+#             "Content-Disposition": f"attachment; filename={filename}",
+#             "Content-Type": f"text/{format_type}; charset=utf-8"
+#         }
+#     )
 
 # CSV column information endpoint
 @router.get("/info/csv-columns")
