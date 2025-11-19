@@ -227,6 +227,28 @@ inflammatory_diseases.csv
 # Check API health status
 curl "https://qjempg3k6t.us-east-2.awsapprunner.com/health"
 
+
+API Endpoints Summary
+
+| Endpoint                         | Method | Description                   |
+|----------------------------------|--------|-------------------------------|
+| /targets/{gene_symbol}           | GET    | Get target information        |
+| /targets/{gene_symbol}/diseases  | GET    | Get diseases for target       |
+| /targets/{gene_symbol}/ligands   | GET    | Get ligands for target        |
+| /targets/batch                   | POST   | Batch fetch multiple targets  |
+| /targets?search=term             | GET    | Search targets                |
+| /ligands/{ligand_id}             | GET    | Get ligand information        |
+| /ligands/{ligand_id}/targets     | GET    | Get targets for ligand        |
+| /ligands/batch                   | POST   | Batch fetch multiple ligands  |
+| /ligands?search=term             | GET    | Search ligands                |
+| /diseases/{disease_name}         | GET    | Get disease information       |
+| /diseases/{disease_name}/targets | GET    | Get targets for disease       |
+| /diseases/batch                  | POST   | Batch fetch multiple diseases |
+| /diseases?search=term            | GET    | Search diseases               |
+| /health                          | GET    | Health check                  |
+
+
+<!--
 Docker Deployment
 
 Build and run using Docker:
@@ -248,65 +270,6 @@ docker tag pharos-api:latest 166810338829.dkr.ecr.us-east-2.amazonaws.com/pharos
 Push the image:
 docker push 166810338829.dkr.ecr.us-east-2.amazonaws.com/pharos-api:latest
 
-API Endpoints Summary
-
-| Endpoint                         | Method | Description                   |
-|----------------------------------|--------|-------------------------------|
-| /targets/{gene_symbol}           | GET    | Get target information        |
-| /targets/{gene_symbol}/diseases  | GET    | Get diseases for target       |
-| /targets/{gene_symbol}/ligands   | GET    | Get ligands for target        |
-| /targets/batch                   | POST   | Batch fetch multiple targets  |
-| /targets?search=term             | GET    | Search targets                |
-| /ligands/{ligand_id}             | GET    | Get ligand information        |
-| /ligands/{ligand_id}/targets     | GET    | Get targets for ligand        |
-| /ligands/batch                   | POST   | Batch fetch multiple ligands  |
-| /ligands?search=term             | GET    | Search ligands                |
-| /diseases/{disease_name}         | GET    | Get disease information       |
-| /diseases/{disease_name}/targets | GET    | Get targets for disease       |
-| /diseases/batch                  | POST   | Batch fetch multiple diseases |
-| /diseases?search=term            | GET    | Search diseases               |
-| /health                          | GET    | Health check                  |
-
-Galaxy Integration
-
-All endpoints support Galaxy-compatible CSV/TSV output formats. Simply add ?format=csv or
-?format=tsv to any endpoint URL.
-
-Contributing
-
-This project is part of the CFDE (Common Fund Data Ecosystem) IDG (Illuminating the Druggable
-Genome) Data Resource Services initiative.
-
-
-
-
-
-
-## Example Usage
-
-**Get target data as JSON:**
-```
-http://localhost:8000/targets/EGFR
-```
-
-**Download as CSV:**
-```
-http://localhost:8000/targets/EGFR?format=csv
-```
-
-**Download as TSV:**
-```
-http://localhost:8000/targets/EGFR?format=tsv
-```
-
-## Docker Deployment
-
-Build and run using Docker:
-```bash
-docker build -t pharos-api .
-docker run -p 8000:8000 --env-file .env pharos-api
-```
-
 Reauthenticate to ECR
 aws ecr get-login-password --region us-east-2 | docker login --username AWS --password-stdin 166810338829.dkr.ecr.us-east-2.amazonaws.com
 
@@ -318,3 +281,5 @@ docker tag pharos-api:latest 166810338829.dkr.ecr.us-east-2.amazonaws.com/pharos
 
 Push the image
 docker push 166810338829.dkr.ecr.us-east-2.amazonaws.com/pharos-api:latest
+
+-->
