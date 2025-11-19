@@ -1,4 +1,0 @@
-Disease_Name,Found,MONDO_ID,Description,Association_Count,Direct_Association_Count,Is_Rare_Disease,Datasource_Count,Error
-asthma,true,MONDO:0004979,"A bronchial disease that is characterized by chronic inflammation and narrowing of the airways, which is caused by a combination of environmental and ...",,,Unknown,,
-diabetes,true,,,,,Unknown,,
-cancer,true,MONDO:0004992,"A disease of cellular proliferation that is malignant and primary, characterized by uncontrolled cellular proliferation, local cell invasion and metas...",,,Unknown,,

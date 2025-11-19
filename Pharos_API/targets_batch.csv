@@ -1,5 +1,0 @@
-Gene_Symbol,Found,Target_Name,UniProt_ID,Description,Development_Level,Protein_Family,Novelty_Score,Error
-EGFR,true,Epidermal growth factor receptor,P00533,The protein encoded by this gene is a transmembrane glycoprotein that is a member of the protein kin...,Tclin,Kinase,7.274e-05,
-TP53,true,Cellular tumor antigen p53,P04637,"This gene encodes a tumor suppressor protein containing transcriptional activation, DNA binding, and...",Tchem,TF,1.907e-05,
-BRAF,true,Serine/threonine-protein kinase B-raf,P15056,This gene encodes a protein belonging to the RAF family of serine/threonine protein kinases. This pr...,Tclin,Kinase,0.00253795,
-KRAS,true,GTPase KRas,P01116,"This gene, a Kirsten ras oncogene homolog from the mammalian ras gene family, encodes a protein that...",Tclin,Enzyme,0.00013856,
