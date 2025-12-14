@@ -21,6 +21,7 @@ from app.models import Struct2atc
 from app.models import DrugClass
 from app.models import Doid
 from app.database import SessionLocal
+from app.csv_utils import create_csv_response, create_tsv_response, generate_filename
 from urllib.parse import unquote
 from sqlalchemy import func
 from typing import List
@@ -106,6 +107,19 @@ def read_act_table_full_by_organism(organism: str, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="organism not found")
     return result
 
+# CSV/TSV Export for act_table_full
+@app.get("/act_table_full/csv")
+def export_act_table_full_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(ActTableFull).offset(skip).limit(limit).all()
+    filename = generate_filename("act_table_full", "csv")
+    return create_csv_response(data, filename)
+
+@app.get("/act_table_full/tsv")
+def export_act_table_full_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(ActTableFull).offset(skip).limit(limit).all()
+    filename = generate_filename("act_table_full", "tsv")
+    return create_tsv_response(data, filename)
+
 
 # TABLE 2:  structures
 @app.get("/structures")
@@ -149,6 +163,19 @@ def read_structures_by_inchikey(inchikey: str, db: Session = Depends(get_db)):
     if not result:
         raise HTTPException(status_code=404, detail="inchikey not found")
     return result
+
+# CSV/TSV Export for structures
+@app.get("/structures/csv")
+def export_structures_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(Structures).offset(skip).limit(limit).all()
+    filename = generate_filename("structures", "csv")
+    return create_csv_response(data, filename)
+
+@app.get("/structures/tsv")
+def export_structures_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(Structures).offset(skip).limit(limit).all()
+    filename = generate_filename("structures", "tsv")
+    return create_tsv_response(data, filename)
 
 
 # TABLE 3:  Identifier
@@ -235,6 +262,19 @@ def read_synonyms_by_name(name: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="name not found")
     return result
 
+# CSV/TSV Export for synonyms
+@app.get("/synonyms/csv")
+def export_synonyms_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(Synonyms).offset(skip).limit(limit).all()
+    filename = generate_filename("synonyms", "csv")
+    return create_csv_response(data, filename)
+
+@app.get("/synonyms/tsv")
+def export_synonyms_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(Synonyms).offset(skip).limit(limit).all()
+    filename = generate_filename("synonyms", "tsv")
+    return create_tsv_response(data, filename)
+
 # Table 6: target_class
 @app.get("/target_class")
 def read_target_class(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
@@ -299,6 +339,19 @@ def read_target_component_by_gene(gene: str, db: Session = Depends(get_db)):
     if not result:
         raise HTTPException(status_code=404, detail="gene not found")
     return result
+
+# CSV/TSV Export for target_component
+@app.get("/target_component/csv")
+def export_target_component_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(TargetComponent).offset(skip).limit(limit).all()
+    filename = generate_filename("target_component", "csv")
+    return create_csv_response(data, filename)
+
+@app.get("/target_component/tsv")
+def export_target_component_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(TargetComponent).offset(skip).limit(limit).all()
+    filename = generate_filename("target_component", "tsv")
+    return create_tsv_response(data, filename)
 
 
 # Table 8: target_dictionary
@@ -554,6 +607,19 @@ def read_product_by_route(route: str, db: Session = Depends(get_db)):
     if not result:
         raise HTTPException(status_code=404, detail="route not found")
     return result
+
+# CSV/TSV Export for product
+@app.get("/product/csv")
+def export_product_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(Product).offset(skip).limit(limit).all()
+    filename = generate_filename("product", "csv")
+    return create_csv_response(data, filename)
+
+@app.get("/product/tsv")
+def export_product_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(Product).offset(skip).limit(limit).all()
+    filename = generate_filename("product", "tsv")
+    return create_tsv_response(data, filename)
 
 
 
