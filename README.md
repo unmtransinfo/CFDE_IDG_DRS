@@ -126,37 +126,14 @@ curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/structures?skip=100&limit=10
 curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/structures/csv?limit=5000" -o structures.csv
 ```
 
-## Technical Stack
-
-- **Framework**: FastAPI
-- **Database**: PostgreSQL (DrugCentral)
-- **ORM**: SQLAlchemy
-- **Hosting**: AWS App Runner
-- **Container Registry**: Amazon ECR
-
-## Deployment
-
-For deployment instructions, see [DEPLOYMENT.md](DEPLOYMENT.md).
-
 ## Developer Information
-
-**Lead Developer**: Praveen Kumar, PhD (University of New Mexico)
-
-**Principal Investigators**:
-- Christophe Lambert, PhD (University of New Mexico)
+- Manjil Pradhan, BSc (University of New Mexico)
+- Praveen Kumar, PhD (University of New Mexico)
 - Jeremy Yang, PhD (University of New Mexico)
 
 ## Project Context
 
 This API is part of the Illuminating the Druggable Genome (IDG) Data Coordinating Center (DCC) initiative, which develops tools and workflows for integration, harmonization, and FAIRification of IDG resources within the Common Fund Data Ecosystem (CFDE).
-
-## License
-
-This project is part of the CFDE IDG DCC and follows the applicable licensing terms.
-
-## Acknowledgments
-
-This work is supported by the NIH Common Fund through the Illuminating the Druggable Genome (IDG) program.
 
 ---
 
