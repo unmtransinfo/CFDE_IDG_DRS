@@ -73,7 +73,7 @@ def health(db: Session = Depends(get_db)):
 
 # TABLE 1:  act_table_full
 @app.get("/act_table_full")
-def read_doid(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+def read_act_table_full(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
     return query_ordered(db, ActTableFull).offset(skip).limit(limit).all()
 
 @app.get("/act_table_full/act_id/{act_id}")
