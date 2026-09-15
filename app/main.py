@@ -42,6 +42,11 @@ def get_db():
     finally:
         db.close()
 
+# Order every table query by its primary key, so skip/limit pages, exports and
+# filtered results come back in the same order on every call.
+def query_ordered(db: Session, model):
+    return db.query(model).order_by(*model.__mapper__.primary_key)
+
 # Database errors: return a clear status instead of a generic 500.
 # QueryCanceled means the query exceeded statement_timeout (see app/database.py).
 @app.exception_handler(OperationalError)
@@ -69,18 +74,18 @@ def health(db: Session = Depends(get_db)):
 # TABLE 1:  act_table_full
 @app.get("/act_table_full")
 def read_doid(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(ActTableFull).offset(skip).limit(limit).all()
+    return query_ordered(db, ActTableFull).offset(skip).limit(limit).all()
 
 @app.get("/act_table_full/act_id/{act_id}")
 def read_act_table_full_by_act_id(act_id: int, db: Session = Depends(get_db)):
-    result = db.query(ActTableFull).filter(ActTableFull.act_id == act_id).all()
+    result = query_ordered(db, ActTableFull).filter(ActTableFull.act_id == act_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="act_id not found")
     return result
 
 @app.get("/act_table_full/struct_id/{struct_id}")
 def read_act_table_full_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
-    result = db.query(ActTableFull).filter(ActTableFull.struct_id == struct_id).all()
+    result = query_ordered(db, ActTableFull).filter(ActTableFull.struct_id == struct_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="struct_id not found")
     return result
@@ -88,7 +93,7 @@ def read_act_table_full_by_struct_id(struct_id: int, db: Session = Depends(get_d
 @app.get("/act_table_full/target_class/{target_class}")
 def read_act_table_full_by_target_class(target_class: str, db: Session = Depends(get_db)):
     decoded_target_class = unquote(target_class)
-    result = db.query(ActTableFull).filter(func.trim(ActTableFull.target_class).ilike(f"%{decoded_target_class}%")).all()
+    result = query_ordered(db, ActTableFull).filter(func.trim(ActTableFull.target_class).ilike(f"%{decoded_target_class}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="target_class not found")
     return result
@@ -96,7 +101,7 @@ def read_act_table_full_by_target_class(target_class: str, db: Session = Depends
 @app.get("/act_table_full/accession/{accession}")
 def read_act_table_full_by_accession(accession: str, db: Session = Depends(get_db)):
     decoded_accession = unquote(accession)
-    result = db.query(ActTableFull).filter(func.trim(ActTableFull.accession).ilike(f"%{decoded_accession}%")).all()
+    result = query_ordered(db, ActTableFull).filter(func.trim(ActTableFull.accession).ilike(f"%{decoded_accession}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="accession not found")
     return result
@@ -104,7 +109,7 @@ def read_act_table_full_by_accession(accession: str, db: Session = Depends(get_d
 @app.get("/act_table_full/gene/{gene}")
 def read_act_table_full_by_gene(gene: str, db: Session = Depends(get_db)):
     decoded_gene = unquote(gene)
-    result = db.query(ActTableFull).filter(func.trim(ActTableFull.gene).ilike(f"%{decoded_gene}%")).all()
+    result = query_ordered(db, ActTableFull).filter(func.trim(ActTableFull.gene).ilike(f"%{decoded_gene}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="gene not found")
     return result
@@ -112,7 +117,7 @@ def read_act_table_full_by_gene(gene: str, db: Session = Depends(get_db)):
 @app.get("/act_table_full/swissprot/{swissprot}")
 def read_act_table_full_by_swissprot(swissprot: str, db: Session = Depends(get_db)):
     decoded_swissprot = unquote(swissprot)
-    result = db.query(ActTableFull).filter(func.trim(ActTableFull.swissprot).ilike(f"%{decoded_swissprot}%")).all()
+    result = query_ordered(db, ActTableFull).filter(func.trim(ActTableFull.swissprot).ilike(f"%{decoded_swissprot}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="swissprot not found")
     return result
@@ -120,7 +125,7 @@ def read_act_table_full_by_swissprot(swissprot: str, db: Session = Depends(get_d
 @app.get("/act_table_full/act_type/{act_type}")
 def read_act_table_full_by_act_type(act_type: str, db: Session = Depends(get_db)):
     decoded_act_type = unquote(act_type)
-    result = db.query(ActTableFull).filter(func.trim(ActTableFull.act_type).ilike(f"%{decoded_act_type}%")).all()
+    result = query_ordered(db, ActTableFull).filter(func.trim(ActTableFull.act_type).ilike(f"%{decoded_act_type}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="act_type not found")
     return result
@@ -128,7 +133,7 @@ def read_act_table_full_by_act_type(act_type: str, db: Session = Depends(get_db)
 @app.get("/act_table_full/organism/{organism}")
 def read_act_table_full_by_organism(organism: str, db: Session = Depends(get_db)):
     decoded_organism = unquote(organism)
-    result = db.query(ActTableFull).filter(func.trim(ActTableFull.organism).ilike(f"%{decoded_organism}%")).all()
+    result = query_ordered(db, ActTableFull).filter(func.trim(ActTableFull.organism).ilike(f"%{decoded_organism}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="organism not found")
     return result
@@ -136,13 +141,13 @@ def read_act_table_full_by_organism(organism: str, db: Session = Depends(get_db)
 # CSV/TSV Export for act_table_full
 @app.get("/act_table_full/csv")
 def export_act_table_full_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(ActTableFull).offset(skip).limit(limit).all()
+    data = query_ordered(db, ActTableFull).offset(skip).limit(limit).all()
     filename = generate_filename("act_table_full", "csv")
     return create_csv_response(data, filename)
 
 @app.get("/act_table_full/tsv")
 def export_act_table_full_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(ActTableFull).offset(skip).limit(limit).all()
+    data = query_ordered(db, ActTableFull).offset(skip).limit(limit).all()
     filename = generate_filename("act_table_full", "tsv")
     return create_tsv_response(data, filename)
 
@@ -150,18 +155,18 @@ def export_act_table_full_tsv(skip: int = 0, limit: int = 1000, db: Session = De
 # TABLE 2:  structures
 @app.get("/structures")
 def read_structures(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Structures).offset(skip).limit(limit).all()
+    return query_ordered(db, Structures).offset(skip).limit(limit).all()
 
 @app.get("/structures/cd_id/{cd_id}")
 def read_structures_by_cd_id(cd_id: int, db: Session = Depends(get_db)):
-    result = db.query(Structures).filter(Structures.cd_id == cd_id).all()
+    result = query_ordered(db, Structures).filter(Structures.cd_id == cd_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="cd_id not found")
     return result
 
 @app.get("/structures/id/{id}")
 def read_structures_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(Structures).filter(Structures.id == id).all()
+    result = query_ordered(db, Structures).filter(Structures.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -169,7 +174,7 @@ def read_structures_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/structures/name/{name}")
 def read_structures_by_name(name: str, db: Session = Depends(get_db)):
     decoded_name = unquote(name)
-    result = db.query(Structures).filter(func.trim(Structures.name).ilike(f"%{decoded_name}%")).all()
+    result = query_ordered(db, Structures).filter(func.trim(Structures.name).ilike(f"%{decoded_name}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="name not found")
     return result
@@ -177,7 +182,7 @@ def read_structures_by_name(name: str, db: Session = Depends(get_db)):
 @app.get("/structures/smiles/{smiles}")
 def read_structures_by_smiles(smiles: str, db: Session = Depends(get_db)):
     decoded_smiles = unquote(smiles)
-    result = db.query(Structures).filter(func.trim(Structures.smiles).ilike(f"%{decoded_smiles}%")).all()
+    result = query_ordered(db, Structures).filter(func.trim(Structures.smiles).ilike(f"%{decoded_smiles}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="smiles not found")
     return result
@@ -185,7 +190,7 @@ def read_structures_by_smiles(smiles: str, db: Session = Depends(get_db)):
 @app.get("/structures/inchikey/{inchikey}")
 def read_structures_by_inchikey(inchikey: str, db: Session = Depends(get_db)):
     decoded_inchikey = unquote(inchikey)
-    result = db.query(Structures).filter(func.trim(Structures.inchikey).ilike(f"%{decoded_inchikey}%")).all()
+    result = query_ordered(db, Structures).filter(func.trim(Structures.inchikey).ilike(f"%{decoded_inchikey}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="inchikey not found")
     return result
@@ -193,14 +198,14 @@ def read_structures_by_inchikey(inchikey: str, db: Session = Depends(get_db)):
 # CSV/TSV Export for structures
 @app.get("/structures/csv")
 def export_structures_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(Structures).offset(skip).limit(limit).all()
+    data = query_ordered(db, Structures).offset(skip).limit(limit).all()
     filename = generate_filename("structures", "csv")
     # Exclude molfile column by default - it contains multi-line data that causes parsing issues
     return create_csv_response(data, filename, exclude_columns=['molfile'])
 
 @app.get("/structures/tsv")
 def export_structures_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(Structures).offset(skip).limit(limit).all()
+    data = query_ordered(db, Structures).offset(skip).limit(limit).all()
     filename = generate_filename("structures", "tsv")
     # Exclude molfile column by default - it contains multi-line data that causes parsing issues
     return create_tsv_response(data, filename, exclude_columns=['molfile'])
@@ -209,11 +214,11 @@ def export_structures_tsv(skip: int = 0, limit: int = 1000, db: Session = Depend
 # TABLE 3:  Identifier
 @app.get("/identifier")
 def read_identifier(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Identifier).offset(skip).limit(limit).all()
+    return query_ordered(db, Identifier).offset(skip).limit(limit).all()
 
 @app.get("/identifier/id/{id}")
 def read_identifier_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(Identifier).filter(Identifier.id == id).all()
+    result = query_ordered(db, Identifier).filter(Identifier.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -221,7 +226,7 @@ def read_identifier_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/identifier/identifier/{identifier}")
 def read_identifier_by_identifier(identifier: str, db: Session = Depends(get_db)):
     decoded_identifier = unquote(identifier)
-    result = db.query(Identifier).filter(func.trim(Identifier.identifier).ilike(f"%{decoded_identifier}%")).all()
+    result = query_ordered(db, Identifier).filter(func.trim(Identifier.identifier).ilike(f"%{decoded_identifier}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="identifier not found")
     return result
@@ -229,14 +234,14 @@ def read_identifier_by_identifier(identifier: str, db: Session = Depends(get_db)
 @app.get("/identifier/id_type/{id_type}")
 def read_identifier_by_id_type(id_type: str, db: Session = Depends(get_db)):
     decoded_id_type = unquote(id_type)
-    result = db.query(Identifier).filter(func.trim(Identifier.id_type).ilike(f"%{decoded_id_type}%")).all()
+    result = query_ordered(db, Identifier).filter(func.trim(Identifier.id_type).ilike(f"%{decoded_id_type}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="id_type not found")
     return result
 
 @app.get("/identifier/struct_id/{struct_id}")
 def read_identifier_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
-    result = db.query(Identifier).filter(Identifier.struct_id == struct_id).all()
+    result = query_ordered(db, Identifier).filter(Identifier.struct_id == struct_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="struct_id not found")
     return result
@@ -245,11 +250,11 @@ def read_identifier_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
 # Table 4: id_type
 @app.get("/id_type")
 def read_id_type(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(IdType).offset(skip).limit(limit).all()
+    return query_ordered(db, IdType).offset(skip).limit(limit).all()
 
 @app.get("/id_type/id/{id}")
 def read_id_type_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(IdType).filter(IdType.id == id).all()
+    result = query_ordered(db, IdType).filter(IdType.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -257,7 +262,7 @@ def read_id_type_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/id_type/type/{type}")
 def read_id_type_by_type(type: str, db: Session = Depends(get_db)):
     decoded_type = unquote(type)
-    result = db.query(IdType).filter(func.trim(IdType.type).ilike(f"%{decoded_type}%")).all()
+    result = query_ordered(db, IdType).filter(func.trim(IdType.type).ilike(f"%{decoded_type}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="type not found")
     return result
@@ -266,18 +271,18 @@ def read_id_type_by_type(type: str, db: Session = Depends(get_db)):
 # Table 5: synonyms
 @app.get("/synonyms")
 def read_synonyms(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Synonyms).offset(skip).limit(limit).all()
+    return query_ordered(db, Synonyms).offset(skip).limit(limit).all()
 
 @app.get("/synonyms/syn_id/{syn_id}")
 def read_synonyms_by_syn_id(syn_id: int, db: Session = Depends(get_db)):
-    result = db.query(Synonyms).filter(Synonyms.syn_id == syn_id).all()
+    result = query_ordered(db, Synonyms).filter(Synonyms.syn_id == syn_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="syn_id not found")
     return result
 
 @app.get("/synonyms/id/{id}")
 def read_synonyms_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(Synonyms).filter(Synonyms.id == id).all()
+    result = query_ordered(db, Synonyms).filter(Synonyms.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -285,7 +290,7 @@ def read_synonyms_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/synonyms/name/{name}")
 def read_synonyms_by_name(name: str, db: Session = Depends(get_db)):
     decoded_name = unquote(name)
-    result = db.query(Synonyms).filter(func.trim(Synonyms.name).ilike(f"%{decoded_name}%")).all()
+    result = query_ordered(db, Synonyms).filter(func.trim(Synonyms.name).ilike(f"%{decoded_name}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="name not found")
     return result
@@ -293,24 +298,24 @@ def read_synonyms_by_name(name: str, db: Session = Depends(get_db)):
 # CSV/TSV Export for synonyms
 @app.get("/synonyms/csv")
 def export_synonyms_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(Synonyms).offset(skip).limit(limit).all()
+    data = query_ordered(db, Synonyms).offset(skip).limit(limit).all()
     filename = generate_filename("synonyms", "csv")
     return create_csv_response(data, filename)
 
 @app.get("/synonyms/tsv")
 def export_synonyms_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(Synonyms).offset(skip).limit(limit).all()
+    data = query_ordered(db, Synonyms).offset(skip).limit(limit).all()
     filename = generate_filename("synonyms", "tsv")
     return create_tsv_response(data, filename)
 
 # Table 6: target_class
 @app.get("/target_class")
 def read_target_class(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(TargetClass).offset(skip).limit(limit).all()
+    return query_ordered(db, TargetClass).offset(skip).limit(limit).all()
 
 @app.get("/target_class/id/{id}")
 def read_target_class_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(TargetClass).filter(TargetClass.id == id).all()
+    result = query_ordered(db, TargetClass).filter(TargetClass.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -318,7 +323,7 @@ def read_target_class_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/target_class/l1/{l1}")
 def read_target_class_by_l1(l1: str, db: Session = Depends(get_db)):
     decoded_l1 = unquote(l1)
-    result = db.query(TargetClass).filter(func.trim(TargetClass.l1).ilike(f"%{decoded_l1}%")).all()
+    result = query_ordered(db, TargetClass).filter(func.trim(TargetClass.l1).ilike(f"%{decoded_l1}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="l1 not found")
     return result
@@ -327,11 +332,11 @@ def read_target_class_by_l1(l1: str, db: Session = Depends(get_db)):
 # Table 7: target_component
 @app.get("/target_component")
 def read_target_component(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(TargetComponent).offset(skip).limit(limit).all()
+    return query_ordered(db, TargetComponent).offset(skip).limit(limit).all()
 
 @app.get("/target_component/id/{id}")
 def read_target_component_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(TargetComponent).filter(TargetComponent.id == id).all()
+    result = query_ordered(db, TargetComponent).filter(TargetComponent.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -339,7 +344,7 @@ def read_target_component_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/target_component/accession/{accession}")
 def read_target_component_by_accession(accession: str, db: Session = Depends(get_db)):
     decoded_accession = unquote(accession)
-    result = db.query(TargetComponent).filter(func.trim(TargetComponent.accession).ilike(f"%{decoded_accession}%")).all()
+    result = query_ordered(db, TargetComponent).filter(func.trim(TargetComponent.accession).ilike(f"%{decoded_accession}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="accession not found")
     return result
@@ -347,7 +352,7 @@ def read_target_component_by_accession(accession: str, db: Session = Depends(get
 @app.get("/target_component/swissprot/{swissprot}")
 def read_target_component_by_swissprot(swissprot: str, db: Session = Depends(get_db)):
     decoded_swissprot = unquote(swissprot)
-    result = db.query(TargetComponent).filter(func.trim(TargetComponent.swissprot).ilike(f"%{decoded_swissprot}%")).all()
+    result = query_ordered(db, TargetComponent).filter(func.trim(TargetComponent.swissprot).ilike(f"%{decoded_swissprot}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="swissprot not found")
     return result
@@ -355,7 +360,7 @@ def read_target_component_by_swissprot(swissprot: str, db: Session = Depends(get
 @app.get("/target_component/organism/{organism}")
 def read_target_component_by_organism(organism: str, db: Session = Depends(get_db)):
     decoded_organism = unquote(organism)
-    result = db.query(TargetComponent).filter(func.trim(TargetComponent.organism).ilike(f"%{decoded_organism}%")).all()
+    result = query_ordered(db, TargetComponent).filter(func.trim(TargetComponent.organism).ilike(f"%{decoded_organism}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="organism not found")
     return result
@@ -363,7 +368,7 @@ def read_target_component_by_organism(organism: str, db: Session = Depends(get_d
 @app.get("/target_component/gene/{gene}")
 def read_target_component_by_gene(gene: str, db: Session = Depends(get_db)):
     decoded_gene = unquote(gene)
-    result = db.query(TargetComponent).filter(func.trim(TargetComponent.gene).ilike(f"%{decoded_gene}%")).all()
+    result = query_ordered(db, TargetComponent).filter(func.trim(TargetComponent.gene).ilike(f"%{decoded_gene}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="gene not found")
     return result
@@ -371,13 +376,13 @@ def read_target_component_by_gene(gene: str, db: Session = Depends(get_db)):
 # CSV/TSV Export for target_component
 @app.get("/target_component/csv")
 def export_target_component_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(TargetComponent).offset(skip).limit(limit).all()
+    data = query_ordered(db, TargetComponent).offset(skip).limit(limit).all()
     filename = generate_filename("target_component", "csv")
     return create_csv_response(data, filename)
 
 @app.get("/target_component/tsv")
 def export_target_component_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(TargetComponent).offset(skip).limit(limit).all()
+    data = query_ordered(db, TargetComponent).offset(skip).limit(limit).all()
     filename = generate_filename("target_component", "tsv")
     return create_tsv_response(data, filename)
 
@@ -385,11 +390,11 @@ def export_target_component_tsv(skip: int = 0, limit: int = 1000, db: Session = 
 # Table 8: target_dictionary
 @app.get("/target_dictionary")
 def read_target_dictionary(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(TargetDictionary).offset(skip).limit(limit).all()
+    return query_ordered(db, TargetDictionary).offset(skip).limit(limit).all()
 
 @app.get("/target_dictionary/id/{id}")
 def read_target_dictionary_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(TargetDictionary).filter(TargetDictionary.id == id).all()
+    result = query_ordered(db, TargetDictionary).filter(TargetDictionary.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -397,7 +402,7 @@ def read_target_dictionary_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/target_dictionary/target_class/{target_class}")
 def read_target_dictionary_by_target_class(target_class: str, db: Session = Depends(get_db)):
     decoded_target_class = unquote(target_class)
-    result = db.query(TargetDictionary).filter(func.trim(TargetDictionary.target_class).ilike(f"%{decoded_target_class}%")).all()
+    result = query_ordered(db, TargetDictionary).filter(func.trim(TargetDictionary.target_class).ilike(f"%{decoded_target_class}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="target_class not found")
     return result
@@ -406,12 +411,12 @@ def read_target_dictionary_by_target_class(target_class: str, db: Session = Depe
 # Table 9: target_go
 @app.get("/target_go")
 def read_target_go(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(TargetGo).offset(skip).limit(limit).all()
+    return query_ordered(db, TargetGo).offset(skip).limit(limit).all()
 
 @app.get("/target_go/id/{id}")
 def read_target_go_by_id(id: str, db: Session = Depends(get_db)):
     decoded_id = unquote(id)
-    result = db.query(TargetGo).filter(func.trim(TargetGo.id).ilike(f"%{decoded_id}%")).all()
+    result = query_ordered(db, TargetGo).filter(func.trim(TargetGo.id).ilike(f"%{decoded_id}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -419,7 +424,7 @@ def read_target_go_by_id(id: str, db: Session = Depends(get_db)):
 @app.get("/target_go/type/{type}")
 def read_target_go_by_type(type: str, db: Session = Depends(get_db)):
     decoded_type = unquote(type)
-    result = db.query(TargetGo).filter(func.trim(TargetGo.type).ilike(f"%{decoded_type}%")).all()
+    result = query_ordered(db, TargetGo).filter(func.trim(TargetGo.type).ilike(f"%{decoded_type}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="type not found")
     return result
@@ -428,12 +433,12 @@ def read_target_go_by_type(type: str, db: Session = Depends(get_db)):
 # Table 10: target_keyword
 @app.get("/target_keyword")
 def read_target_keyword(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(TargetKeyword).offset(skip).limit(limit).all()
+    return query_ordered(db, TargetKeyword).offset(skip).limit(limit).all()
 
 @app.get("/target_keyword/id/{id}")
 def read_target_keyword_by_id(id: str, db: Session = Depends(get_db)):
     decoded_id = unquote(id)
-    result = db.query(TargetKeyword).filter(func.trim(TargetKeyword.id).ilike(f"%{decoded_id}%")).all()
+    result = query_ordered(db, TargetKeyword).filter(func.trim(TargetKeyword.id).ilike(f"%{decoded_id}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -441,7 +446,7 @@ def read_target_keyword_by_id(id: str, db: Session = Depends(get_db)):
 @app.get("/target_keyword/category/{category}")
 def read_target_keyword_by_category(category: str, db: Session = Depends(get_db)):
     decoded_category = unquote(category)
-    result = db.query(TargetKeyword).filter(func.trim(TargetKeyword.category).ilike(f"%{decoded_category}%")).all()
+    result = query_ordered(db, TargetKeyword).filter(func.trim(TargetKeyword.category).ilike(f"%{decoded_category}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="category not found")
     return result
@@ -449,7 +454,7 @@ def read_target_keyword_by_category(category: str, db: Session = Depends(get_db)
 @app.get("/target_keyword/keyword/{keyword}")
 def read_target_keyword_by_keyword(keyword: str, db: Session = Depends(get_db)):
     decoded_keyword = unquote(keyword)
-    result = db.query(TargetKeyword).filter(func.trim(TargetKeyword.keyword).ilike(f"%{decoded_keyword}%")).all()
+    result = query_ordered(db, TargetKeyword).filter(func.trim(TargetKeyword.keyword).ilike(f"%{decoded_keyword}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="keyword not found")
     return result
@@ -458,18 +463,18 @@ def read_target_keyword_by_keyword(keyword: str, db: Session = Depends(get_db)):
 # Table 11: td2tc
 @app.get("/td2tc")
 def read_td2tc(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Td2tc).offset(skip).limit(limit).all()
+    return query_ordered(db, Td2tc).offset(skip).limit(limit).all()
 
 @app.get("/td2tc/target_id/{target_id}")
 def read_td2tc_by_target_id(target_id: int, db: Session = Depends(get_db)):
-    result = db.query(Td2tc).filter(Td2tc.target_id == target_id).all()
+    result = query_ordered(db, Td2tc).filter(Td2tc.target_id == target_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="target_id not found")
     return result
 
 @app.get("/td2tc/component_id/{component_id}")
 def read_td2tc_by_component_id(component_id: int, db: Session = Depends(get_db)):
-    result = db.query(Td2tc).filter(Td2tc.component_id == component_id).all()
+    result = query_ordered(db, Td2tc).filter(Td2tc.component_id == component_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="component_id not found")
     return result
@@ -478,11 +483,11 @@ def read_td2tc_by_component_id(component_id: int, db: Session = Depends(get_db))
 # Table 12: tdgo2tc
 @app.get("/tdgo2tc")
 def read_tdgo2tc(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Tdgo2tc).offset(skip).limit(limit).all()
+    return query_ordered(db, Tdgo2tc).offset(skip).limit(limit).all()
 
 @app.get("/tdgo2tc/id/{id}")
 def read_tdgo2tc_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(Tdgo2tc).filter(Tdgo2tc.id == id).all()
+    result = query_ordered(db, Tdgo2tc).filter(Tdgo2tc.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -490,14 +495,14 @@ def read_tdgo2tc_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/tdgo2tc/go_id/{go_id}")
 def read_tdgo2tc_by_go_id(go_id: str, db: Session = Depends(get_db)):
     decoded_go_id = unquote(go_id)
-    result = db.query(Tdgo2tc).filter(func.trim(Tdgo2tc.go_id).ilike(f"%{decoded_go_id}%")).all()
+    result = query_ordered(db, Tdgo2tc).filter(func.trim(Tdgo2tc.go_id).ilike(f"%{decoded_go_id}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="go_id not found")
     return result
 
 @app.get("/tdgo2tc/component_id/{component_id}")
 def read_tdgo2tc_by_component_id(component_id: int, db: Session = Depends(get_db)):
-    result = db.query(Tdgo2tc).filter(Tdgo2tc.component_id == component_id).all()
+    result = query_ordered(db, Tdgo2tc).filter(Tdgo2tc.component_id == component_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="component_id not found")
     return result
@@ -507,11 +512,11 @@ def read_tdgo2tc_by_component_id(component_id: int, db: Session = Depends(get_db
 # Table 13: tdkey2tc
 @app.get("/tdkey2tc")
 def read_tdkey2tc(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Tdkey2tc).offset(skip).limit(limit).all()
+    return query_ordered(db, Tdkey2tc).offset(skip).limit(limit).all()
 
 @app.get("/tdkey2tc/id/{id}")
 def read_tdkey2tc_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(Tdkey2tc).filter(Tdkey2tc.id == id).all()
+    result = query_ordered(db, Tdkey2tc).filter(Tdkey2tc.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -519,14 +524,14 @@ def read_tdkey2tc_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/tdkey2tc/tdkey_id/{tdkey_id}")
 def read_tdkey2tc_by_tdkey_id(tdkey_id: str, db: Session = Depends(get_db)):
     decoded_tdkey_id = unquote(tdkey_id)
-    result = db.query(Tdkey2tc).filter(func.trim(Tdkey2tc.tdkey_id).ilike(f"%{decoded_tdkey_id}%")).all()
+    result = query_ordered(db, Tdkey2tc).filter(func.trim(Tdkey2tc.tdkey_id).ilike(f"%{decoded_tdkey_id}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="tdkey_id not found")
     return result
 
 @app.get("/tdkey2tc/component_id/{component_id}")
 def read_tdkey2tc_by_component_id(component_id: int, db: Session = Depends(get_db)):
-    result = db.query(Tdkey2tc).filter(Tdkey2tc.component_id == component_id).all()
+    result = query_ordered(db, Tdkey2tc).filter(Tdkey2tc.component_id == component_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="component_id not found")
     return result
@@ -536,25 +541,25 @@ def read_tdkey2tc_by_component_id(component_id: int, db: Session = Depends(get_d
 # Table 14: omop_relationship
 @app.get("/omop_relationship")
 def read_omop_relationship(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(OmopRelationship).offset(skip).limit(limit).all()
+    return query_ordered(db, OmopRelationship).offset(skip).limit(limit).all()
 
 @app.get("/omop_relationship/id/{id}")
 def read_omop_relationship_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(OmopRelationship).filter(OmopRelationship.id == id).all()
+    result = query_ordered(db, OmopRelationship).filter(OmopRelationship.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
 
 @app.get("/omop_relationship/struct_id/{struct_id}")
 def read_omop_relationship_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
-    result = db.query(OmopRelationship).filter(OmopRelationship.struct_id == struct_id).all()
+    result = query_ordered(db, OmopRelationship).filter(OmopRelationship.struct_id == struct_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="struct_id not found")
     return result
 
 @app.get("/omop_relationship/concept_id/{concept_id}")
 def read_omop_relationship_by_concept_id(concept_id: int, db: Session = Depends(get_db)):
-    result = db.query(OmopRelationship).filter(OmopRelationship.concept_id == concept_id).all()
+    result = query_ordered(db, OmopRelationship).filter(OmopRelationship.concept_id == concept_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="concept_id not found")
     return result
@@ -562,7 +567,7 @@ def read_omop_relationship_by_concept_id(concept_id: int, db: Session = Depends(
 @app.get("/omop_relationship/relationship_name/{relationship_name}")
 def read_omop_relationship_by_relationship_name(relationship_name: str, db: Session = Depends(get_db)):
     decoded_relationship_name = unquote(relationship_name)
-    result = db.query(OmopRelationship).filter(func.trim(OmopRelationship.relationship_name).ilike(f"%{decoded_relationship_name}%")).all()
+    result = query_ordered(db, OmopRelationship).filter(func.trim(OmopRelationship.relationship_name).ilike(f"%{decoded_relationship_name}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="relationship_name not found")
     return result
@@ -570,7 +575,7 @@ def read_omop_relationship_by_relationship_name(relationship_name: str, db: Sess
 @app.get("/omop_relationship/concept_name/{concept_name}")
 def read_omop_relationship_by_concept_name(concept_name: str, db: Session = Depends(get_db)):
     decoded_concept_name = unquote(concept_name)
-    result = db.query(OmopRelationship).filter(func.trim(OmopRelationship.concept_name).ilike(f"%{decoded_concept_name}%")).all()
+    result = query_ordered(db, OmopRelationship).filter(func.trim(OmopRelationship.concept_name).ilike(f"%{decoded_concept_name}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="concept_name not found")
     return result
@@ -578,7 +583,7 @@ def read_omop_relationship_by_concept_name(concept_name: str, db: Session = Depe
 @app.get("/omop_relationship/umls_cui/{umls_cui}")
 def read_omop_relationship_by_umls_cui(umls_cui: str, db: Session = Depends(get_db)):
     decoded_umls_cui = unquote(umls_cui)
-    result = db.query(OmopRelationship).filter(func.trim(OmopRelationship.umls_cui).ilike(f"%{decoded_umls_cui}%")).all()
+    result = query_ordered(db, OmopRelationship).filter(func.trim(OmopRelationship.umls_cui).ilike(f"%{decoded_umls_cui}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="umls_cui not found")
     return result
@@ -586,14 +591,14 @@ def read_omop_relationship_by_umls_cui(umls_cui: str, db: Session = Depends(get_
 @app.get("/omop_relationship/cui_semantic_type/{cui_semantic_type}")
 def read_omop_relationship_by_cui_semantic_type(cui_semantic_type: str, db: Session = Depends(get_db)):
     decoded_cui_semantic_type = unquote(cui_semantic_type)
-    result = db.query(OmopRelationship).filter(func.trim(OmopRelationship.cui_semantic_type).ilike(f"%{decoded_cui_semantic_type}%")).all()
+    result = query_ordered(db, OmopRelationship).filter(func.trim(OmopRelationship.cui_semantic_type).ilike(f"%{decoded_cui_semantic_type}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="cui_semantic_type not found")
     return result
 
 @app.get("/omop_relationship/snomed_conceptid/{snomed_conceptid}")
 def read_omop_relationship_by_snomed_conceptid(snomed_conceptid: int, db: Session = Depends(get_db)):
-    result = db.query(OmopRelationship).filter(OmopRelationship.snomed_conceptid == snomed_conceptid).all()
+    result = query_ordered(db, OmopRelationship).filter(OmopRelationship.snomed_conceptid == snomed_conceptid).all()
     if not result:
         raise HTTPException(status_code=404, detail="snomed_conceptid not found")
     return result
@@ -603,11 +608,11 @@ def read_omop_relationship_by_snomed_conceptid(snomed_conceptid: int, db: Sessio
 # Table 15: product
 @app.get("/product")
 def read_product(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Product).offset(skip).limit(limit).all()
+    return query_ordered(db, Product).offset(skip).limit(limit).all()
 
 @app.get("/product/id/{id}")
 def read_product_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(Product).filter(Product.id == id).all()
+    result = query_ordered(db, Product).filter(Product.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -615,7 +620,7 @@ def read_product_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/product/ndc_product_code/{ndc_product_code}")
 def read_product_by_ndc_product_code(ndc_product_code: str, db: Session = Depends(get_db)):
     decoded_ndc_product_code = unquote(ndc_product_code)
-    result = db.query(Product).filter(func.trim(Product.ndc_product_code).ilike(f"%{decoded_ndc_product_code}%")).all()
+    result = query_ordered(db, Product).filter(func.trim(Product.ndc_product_code).ilike(f"%{decoded_ndc_product_code}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="ndc_product_code not found")
     return result
@@ -623,7 +628,7 @@ def read_product_by_ndc_product_code(ndc_product_code: str, db: Session = Depend
 @app.get("/product/product_name/{product_name}")
 def read_product_by_product_name(product_name: str, db: Session = Depends(get_db)):
     decoded_product_name = unquote(product_name)
-    result = db.query(Product).filter(func.trim(Product.product_name).ilike(f"%{decoded_product_name}%")).all()
+    result = query_ordered(db, Product).filter(func.trim(Product.product_name).ilike(f"%{decoded_product_name}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="product_name not found")
     return result
@@ -631,7 +636,7 @@ def read_product_by_product_name(product_name: str, db: Session = Depends(get_db
 @app.get("/product/route/{route}")
 def read_product_by_route(route: str, db: Session = Depends(get_db)):
     decoded_route = unquote(route)
-    result = db.query(Product).filter(func.trim(Product.route).ilike(f"%{decoded_route}%")).all()
+    result = query_ordered(db, Product).filter(func.trim(Product.route).ilike(f"%{decoded_route}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="route not found")
     return result
@@ -639,13 +644,13 @@ def read_product_by_route(route: str, db: Session = Depends(get_db)):
 # CSV/TSV Export for product
 @app.get("/product/csv")
 def export_product_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(Product).offset(skip).limit(limit).all()
+    data = query_ordered(db, Product).offset(skip).limit(limit).all()
     filename = generate_filename("product", "csv")
     return create_csv_response(data, filename)
 
 @app.get("/product/tsv")
 def export_product_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(Product).offset(skip).limit(limit).all()
+    data = query_ordered(db, Product).offset(skip).limit(limit).all()
     filename = generate_filename("product", "tsv")
     return create_tsv_response(data, filename)
 
@@ -654,18 +659,18 @@ def export_product_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(g
 # Table 16: struct2obprod
 @app.get("/struct2obprod")
 def read_struct2obprod(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Struct2obprod).offset(skip).limit(limit).all()
+    return query_ordered(db, Struct2obprod).offset(skip).limit(limit).all()
 
 @app.get("/struct2obprod/struct_id/{struct_id}")
 def read_struct2obprod_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
-    result = db.query(Struct2obprod).filter(Struct2obprod.struct_id == struct_id).all()
+    result = query_ordered(db, Struct2obprod).filter(Struct2obprod.struct_id == struct_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="struct_id not found")
     return result
 
 @app.get("/struct2obprod/prod_id/{prod_id}")
 def read_struct2obprod_by_prod_id(prod_id: int, db: Session = Depends(get_db)):
-    result = db.query(Struct2obprod).filter(Struct2obprod.prod_id == prod_id).all()
+    result = query_ordered(db, Struct2obprod).filter(Struct2obprod.prod_id == prod_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="prod_id not found")
     return result
@@ -675,11 +680,11 @@ def read_struct2obprod_by_prod_id(prod_id: int, db: Session = Depends(get_db)):
 # Table 17: atc
 @app.get("/atc")
 def read_atc(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Atc).offset(skip).limit(limit).all()
+    return query_ordered(db, Atc).offset(skip).limit(limit).all()
 
 @app.get("/atc/id/{id}")
 def read_atc_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(Atc).filter(Atc.id == id).all()
+    result = query_ordered(db, Atc).filter(Atc.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -687,7 +692,7 @@ def read_atc_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/atc/code/{code}")
 def read_atc_by_code(code: str, db: Session = Depends(get_db)):
     decoded_code = unquote(code)
-    result = db.query(Atc).filter(func.trim(Atc.code).ilike(f"%{decoded_code}%")).all()
+    result = query_ordered(db, Atc).filter(func.trim(Atc.code).ilike(f"%{decoded_code}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="code not found")
     return result
@@ -695,7 +700,7 @@ def read_atc_by_code(code: str, db: Session = Depends(get_db)):
 @app.get("/atc/chemical_substance/{chemical_substance}")
 def read_atc_by_chemical_substance(chemical_substance: str, db: Session = Depends(get_db)):
     decoded_chemical_substance = unquote(chemical_substance)
-    result = db.query(Atc).filter(func.trim(Atc.chemical_substance).ilike(f"%{decoded_chemical_substance}%")).all()
+    result = query_ordered(db, Atc).filter(func.trim(Atc.chemical_substance).ilike(f"%{decoded_chemical_substance}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="chemical_substance not found")
     return result
@@ -704,11 +709,11 @@ def read_atc_by_chemical_substance(chemical_substance: str, db: Session = Depend
 # Table 18: struct2atc
 @app.get("/struct2atc")
 def read_struct2atc(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Struct2atc).offset(skip).limit(limit).all()
+    return query_ordered(db, Struct2atc).offset(skip).limit(limit).all()
 
 @app.get("/struct2atc/struct_id/{struct_id}")
 def read_struct2atc_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
-    result = db.query(Struct2atc).filter(Struct2atc.struct_id == struct_id).all()
+    result = query_ordered(db, Struct2atc).filter(Struct2atc.struct_id == struct_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="struct_id not found")
     return result
@@ -716,7 +721,7 @@ def read_struct2atc_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
 @app.get("/struct2atc/atc_code/{atc_code}")
 def read_struct2atc_by_atc_code(atc_code: str, db: Session = Depends(get_db)):
     decoded_atc_code = unquote(atc_code)
-    result = db.query(Struct2atc).filter(func.trim(Struct2atc.atc_code).ilike(f"%{decoded_atc_code}%")).all()
+    result = query_ordered(db, Struct2atc).filter(func.trim(Struct2atc.atc_code).ilike(f"%{decoded_atc_code}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="atc_code not found")
     return result
@@ -726,11 +731,11 @@ def read_struct2atc_by_atc_code(atc_code: str, db: Session = Depends(get_db)):
 # Table 19: drug_class
 @app.get("/drug_class")
 def read_drug_class(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(DrugClass).offset(skip).limit(limit).all()
+    return query_ordered(db, DrugClass).offset(skip).limit(limit).all()
 
 @app.get("/drug_class/id/{id}")
 def read_drug_class_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(DrugClass).filter(DrugClass.id == id).all()
+    result = query_ordered(db, DrugClass).filter(DrugClass.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -738,7 +743,7 @@ def read_drug_class_by_id(id: int, db: Session = Depends(get_db)):
 @app.get("/drug_class/name/{name}")
 def read_drug_class_by_name(name: str, db: Session = Depends(get_db)):
     decoded_name = unquote(name)
-    result = db.query(DrugClass).filter(func.trim(DrugClass.name).ilike(f"%{decoded_name}%")).all()
+    result = query_ordered(db, DrugClass).filter(func.trim(DrugClass.name).ilike(f"%{decoded_name}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="name not found")
     return result
@@ -746,7 +751,7 @@ def read_drug_class_by_name(name: str, db: Session = Depends(get_db)):
 @app.get("/drug_class/source/{source}")
 def read_drug_class_by_source(source: str, db: Session = Depends(get_db)):
     decoded_source = unquote(source)
-    result = db.query(DrugClass).filter(func.trim(DrugClass.source).ilike(f"%{decoded_source}%")).all()
+    result = query_ordered(db, DrugClass).filter(func.trim(DrugClass.source).ilike(f"%{decoded_source}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="source not found")
     return result
@@ -755,18 +760,18 @@ def read_drug_class_by_source(source: str, db: Session = Depends(get_db)):
 # Table 20: faers (all patients)
 @app.get("/faers")
 def read_faers(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(Faers).offset(skip).limit(limit).all()
+    return query_ordered(db, Faers).offset(skip).limit(limit).all()
 
 @app.get("/faers/id/{id}")
 def read_faers_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(Faers).filter(Faers.id == id).all()
+    result = query_ordered(db, Faers).filter(Faers.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
 
 @app.get("/faers/struct_id/{struct_id}")
 def read_faers_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
-    result = db.query(Faers).filter(Faers.struct_id == struct_id).all()
+    result = query_ordered(db, Faers).filter(Faers.struct_id == struct_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="struct_id not found")
     return result
@@ -774,14 +779,14 @@ def read_faers_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
 @app.get("/faers/meddra_name/{meddra_name}")
 def read_faers_by_meddra_name(meddra_name: str, db: Session = Depends(get_db)):
     decoded_meddra_name = unquote(meddra_name)
-    result = db.query(Faers).filter(func.trim(Faers.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
+    result = query_ordered(db, Faers).filter(func.trim(Faers.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="meddra_name not found")
     return result
 
 @app.get("/faers/meddra_code/{meddra_code}")
 def read_faers_by_meddra_code(meddra_code: int, db: Session = Depends(get_db)):
-    result = db.query(Faers).filter(Faers.meddra_code == meddra_code).all()
+    result = query_ordered(db, Faers).filter(Faers.meddra_code == meddra_code).all()
     if not result:
         raise HTTPException(status_code=404, detail="meddra_code not found")
     return result
@@ -789,20 +794,20 @@ def read_faers_by_meddra_code(meddra_code: int, db: Session = Depends(get_db)):
 # CSV/TSV Export for faers
 @app.get("/faers/csv")
 def export_faers_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(Faers).offset(skip).limit(limit).all()
+    data = query_ordered(db, Faers).offset(skip).limit(limit).all()
     filename = generate_filename("faers", "csv")
     return create_csv_response(data, filename)
 
 @app.get("/faers/tsv")
 def export_faers_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(Faers).offset(skip).limit(limit).all()
+    data = query_ordered(db, Faers).offset(skip).limit(limit).all()
     filename = generate_filename("faers", "tsv")
     return create_tsv_response(data, filename)
 
 # Filtered CSV/TSV Export for faers
 @app.get("/faers/id/{id}/csv")
 def export_faers_by_id_csv(id: int, db: Session = Depends(get_db)):
-    data = db.query(Faers).filter(Faers.id == id).all()
+    data = query_ordered(db, Faers).filter(Faers.id == id).all()
     if not data:
         raise HTTPException(status_code=404, detail="id not found")
     filename = generate_filename("faers_id", "csv")
@@ -810,7 +815,7 @@ def export_faers_by_id_csv(id: int, db: Session = Depends(get_db)):
 
 @app.get("/faers/id/{id}/tsv")
 def export_faers_by_id_tsv(id: int, db: Session = Depends(get_db)):
-    data = db.query(Faers).filter(Faers.id == id).all()
+    data = query_ordered(db, Faers).filter(Faers.id == id).all()
     if not data:
         raise HTTPException(status_code=404, detail="id not found")
     filename = generate_filename("faers_id", "tsv")
@@ -818,7 +823,7 @@ def export_faers_by_id_tsv(id: int, db: Session = Depends(get_db)):
 
 @app.get("/faers/struct_id/{struct_id}/csv")
 def export_faers_by_struct_id_csv(struct_id: int, db: Session = Depends(get_db)):
-    data = db.query(Faers).filter(Faers.struct_id == struct_id).all()
+    data = query_ordered(db, Faers).filter(Faers.struct_id == struct_id).all()
     if not data:
         raise HTTPException(status_code=404, detail="struct_id not found")
     filename = generate_filename("faers_struct_id", "csv")
@@ -826,7 +831,7 @@ def export_faers_by_struct_id_csv(struct_id: int, db: Session = Depends(get_db))
 
 @app.get("/faers/struct_id/{struct_id}/tsv")
 def export_faers_by_struct_id_tsv(struct_id: int, db: Session = Depends(get_db)):
-    data = db.query(Faers).filter(Faers.struct_id == struct_id).all()
+    data = query_ordered(db, Faers).filter(Faers.struct_id == struct_id).all()
     if not data:
         raise HTTPException(status_code=404, detail="struct_id not found")
     filename = generate_filename("faers_struct_id", "tsv")
@@ -835,7 +840,7 @@ def export_faers_by_struct_id_tsv(struct_id: int, db: Session = Depends(get_db))
 @app.get("/faers/meddra_name/{meddra_name}/csv")
 def export_faers_by_meddra_name_csv(meddra_name: str, db: Session = Depends(get_db)):
     decoded_meddra_name = unquote(meddra_name)
-    data = db.query(Faers).filter(func.trim(Faers.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
+    data = query_ordered(db, Faers).filter(func.trim(Faers.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_name not found")
     filename = generate_filename("faers_meddra_name", "csv")
@@ -844,7 +849,7 @@ def export_faers_by_meddra_name_csv(meddra_name: str, db: Session = Depends(get_
 @app.get("/faers/meddra_name/{meddra_name}/tsv")
 def export_faers_by_meddra_name_tsv(meddra_name: str, db: Session = Depends(get_db)):
     decoded_meddra_name = unquote(meddra_name)
-    data = db.query(Faers).filter(func.trim(Faers.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
+    data = query_ordered(db, Faers).filter(func.trim(Faers.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_name not found")
     filename = generate_filename("faers_meddra_name", "tsv")
@@ -852,7 +857,7 @@ def export_faers_by_meddra_name_tsv(meddra_name: str, db: Session = Depends(get_
 
 @app.get("/faers/meddra_code/{meddra_code}/csv")
 def export_faers_by_meddra_code_csv(meddra_code: int, db: Session = Depends(get_db)):
-    data = db.query(Faers).filter(Faers.meddra_code == meddra_code).all()
+    data = query_ordered(db, Faers).filter(Faers.meddra_code == meddra_code).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_code not found")
     filename = generate_filename("faers_meddra_code", "csv")
@@ -860,7 +865,7 @@ def export_faers_by_meddra_code_csv(meddra_code: int, db: Session = Depends(get_
 
 @app.get("/faers/meddra_code/{meddra_code}/tsv")
 def export_faers_by_meddra_code_tsv(meddra_code: int, db: Session = Depends(get_db)):
-    data = db.query(Faers).filter(Faers.meddra_code == meddra_code).all()
+    data = query_ordered(db, Faers).filter(Faers.meddra_code == meddra_code).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_code not found")
     filename = generate_filename("faers_meddra_code", "tsv")
@@ -870,18 +875,18 @@ def export_faers_by_meddra_code_tsv(meddra_code: int, db: Session = Depends(get_
 # Table 21: faers_female
 @app.get("/faers_female")
 def read_faers_female(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(FaersFemale).offset(skip).limit(limit).all()
+    return query_ordered(db, FaersFemale).offset(skip).limit(limit).all()
 
 @app.get("/faers_female/id/{id}")
 def read_faers_female_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(FaersFemale).filter(FaersFemale.id == id).all()
+    result = query_ordered(db, FaersFemale).filter(FaersFemale.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
 
 @app.get("/faers_female/struct_id/{struct_id}")
 def read_faers_female_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
-    result = db.query(FaersFemale).filter(FaersFemale.struct_id == struct_id).all()
+    result = query_ordered(db, FaersFemale).filter(FaersFemale.struct_id == struct_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="struct_id not found")
     return result
@@ -889,14 +894,14 @@ def read_faers_female_by_struct_id(struct_id: int, db: Session = Depends(get_db)
 @app.get("/faers_female/meddra_name/{meddra_name}")
 def read_faers_female_by_meddra_name(meddra_name: str, db: Session = Depends(get_db)):
     decoded_meddra_name = unquote(meddra_name)
-    result = db.query(FaersFemale).filter(func.trim(FaersFemale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
+    result = query_ordered(db, FaersFemale).filter(func.trim(FaersFemale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="meddra_name not found")
     return result
 
 @app.get("/faers_female/meddra_code/{meddra_code}")
 def read_faers_female_by_meddra_code(meddra_code: int, db: Session = Depends(get_db)):
-    result = db.query(FaersFemale).filter(FaersFemale.meddra_code == meddra_code).all()
+    result = query_ordered(db, FaersFemale).filter(FaersFemale.meddra_code == meddra_code).all()
     if not result:
         raise HTTPException(status_code=404, detail="meddra_code not found")
     return result
@@ -904,20 +909,20 @@ def read_faers_female_by_meddra_code(meddra_code: int, db: Session = Depends(get
 # CSV/TSV Export for faers_female
 @app.get("/faers_female/csv")
 def export_faers_female_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(FaersFemale).offset(skip).limit(limit).all()
+    data = query_ordered(db, FaersFemale).offset(skip).limit(limit).all()
     filename = generate_filename("faers_female", "csv")
     return create_csv_response(data, filename)
 
 @app.get("/faers_female/tsv")
 def export_faers_female_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(FaersFemale).offset(skip).limit(limit).all()
+    data = query_ordered(db, FaersFemale).offset(skip).limit(limit).all()
     filename = generate_filename("faers_female", "tsv")
     return create_tsv_response(data, filename)
 
 # Filtered CSV/TSV Export for faers_female
 @app.get("/faers_female/id/{id}/csv")
 def export_faers_female_by_id_csv(id: int, db: Session = Depends(get_db)):
-    data = db.query(FaersFemale).filter(FaersFemale.id == id).all()
+    data = query_ordered(db, FaersFemale).filter(FaersFemale.id == id).all()
     if not data:
         raise HTTPException(status_code=404, detail="id not found")
     filename = generate_filename("faers_female_id", "csv")
@@ -925,7 +930,7 @@ def export_faers_female_by_id_csv(id: int, db: Session = Depends(get_db)):
 
 @app.get("/faers_female/id/{id}/tsv")
 def export_faers_female_by_id_tsv(id: int, db: Session = Depends(get_db)):
-    data = db.query(FaersFemale).filter(FaersFemale.id == id).all()
+    data = query_ordered(db, FaersFemale).filter(FaersFemale.id == id).all()
     if not data:
         raise HTTPException(status_code=404, detail="id not found")
     filename = generate_filename("faers_female_id", "tsv")
@@ -933,7 +938,7 @@ def export_faers_female_by_id_tsv(id: int, db: Session = Depends(get_db)):
 
 @app.get("/faers_female/struct_id/{struct_id}/csv")
 def export_faers_female_by_struct_id_csv(struct_id: int, db: Session = Depends(get_db)):
-    data = db.query(FaersFemale).filter(FaersFemale.struct_id == struct_id).all()
+    data = query_ordered(db, FaersFemale).filter(FaersFemale.struct_id == struct_id).all()
     if not data:
         raise HTTPException(status_code=404, detail="struct_id not found")
     filename = generate_filename("faers_female_struct_id", "csv")
@@ -941,7 +946,7 @@ def export_faers_female_by_struct_id_csv(struct_id: int, db: Session = Depends(g
 
 @app.get("/faers_female/struct_id/{struct_id}/tsv")
 def export_faers_female_by_struct_id_tsv(struct_id: int, db: Session = Depends(get_db)):
-    data = db.query(FaersFemale).filter(FaersFemale.struct_id == struct_id).all()
+    data = query_ordered(db, FaersFemale).filter(FaersFemale.struct_id == struct_id).all()
     if not data:
         raise HTTPException(status_code=404, detail="struct_id not found")
     filename = generate_filename("faers_female_struct_id", "tsv")
@@ -950,7 +955,7 @@ def export_faers_female_by_struct_id_tsv(struct_id: int, db: Session = Depends(g
 @app.get("/faers_female/meddra_name/{meddra_name}/csv")
 def export_faers_female_by_meddra_name_csv(meddra_name: str, db: Session = Depends(get_db)):
     decoded_meddra_name = unquote(meddra_name)
-    data = db.query(FaersFemale).filter(func.trim(FaersFemale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
+    data = query_ordered(db, FaersFemale).filter(func.trim(FaersFemale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_name not found")
     filename = generate_filename("faers_female_meddra_name", "csv")
@@ -959,7 +964,7 @@ def export_faers_female_by_meddra_name_csv(meddra_name: str, db: Session = Depen
 @app.get("/faers_female/meddra_name/{meddra_name}/tsv")
 def export_faers_female_by_meddra_name_tsv(meddra_name: str, db: Session = Depends(get_db)):
     decoded_meddra_name = unquote(meddra_name)
-    data = db.query(FaersFemale).filter(func.trim(FaersFemale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
+    data = query_ordered(db, FaersFemale).filter(func.trim(FaersFemale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_name not found")
     filename = generate_filename("faers_female_meddra_name", "tsv")
@@ -967,7 +972,7 @@ def export_faers_female_by_meddra_name_tsv(meddra_name: str, db: Session = Depen
 
 @app.get("/faers_female/meddra_code/{meddra_code}/csv")
 def export_faers_female_by_meddra_code_csv(meddra_code: int, db: Session = Depends(get_db)):
-    data = db.query(FaersFemale).filter(FaersFemale.meddra_code == meddra_code).all()
+    data = query_ordered(db, FaersFemale).filter(FaersFemale.meddra_code == meddra_code).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_code not found")
     filename = generate_filename("faers_female_meddra_code", "csv")
@@ -975,7 +980,7 @@ def export_faers_female_by_meddra_code_csv(meddra_code: int, db: Session = Depen
 
 @app.get("/faers_female/meddra_code/{meddra_code}/tsv")
 def export_faers_female_by_meddra_code_tsv(meddra_code: int, db: Session = Depends(get_db)):
-    data = db.query(FaersFemale).filter(FaersFemale.meddra_code == meddra_code).all()
+    data = query_ordered(db, FaersFemale).filter(FaersFemale.meddra_code == meddra_code).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_code not found")
     filename = generate_filename("faers_female_meddra_code", "tsv")
@@ -985,18 +990,18 @@ def export_faers_female_by_meddra_code_tsv(meddra_code: int, db: Session = Depen
 # Table 22: faers_male
 @app.get("/faers_male")
 def read_faers_male(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
-    return db.query(FaersMale).offset(skip).limit(limit).all()
+    return query_ordered(db, FaersMale).offset(skip).limit(limit).all()
 
 @app.get("/faers_male/id/{id}")
 def read_faers_male_by_id(id: int, db: Session = Depends(get_db)):
-    result = db.query(FaersMale).filter(FaersMale.id == id).all()
+    result = query_ordered(db, FaersMale).filter(FaersMale.id == id).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
 
 @app.get("/faers_male/struct_id/{struct_id}")
 def read_faers_male_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
-    result = db.query(FaersMale).filter(FaersMale.struct_id == struct_id).all()
+    result = query_ordered(db, FaersMale).filter(FaersMale.struct_id == struct_id).all()
     if not result:
         raise HTTPException(status_code=404, detail="struct_id not found")
     return result
@@ -1004,14 +1009,14 @@ def read_faers_male_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
 @app.get("/faers_male/meddra_name/{meddra_name}")
 def read_faers_male_by_meddra_name(meddra_name: str, db: Session = Depends(get_db)):
     decoded_meddra_name = unquote(meddra_name)
-    result = db.query(FaersMale).filter(func.trim(FaersMale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
+    result = query_ordered(db, FaersMale).filter(func.trim(FaersMale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
     if not result:
         raise HTTPException(status_code=404, detail="meddra_name not found")
     return result
 
 @app.get("/faers_male/meddra_code/{meddra_code}")
 def read_faers_male_by_meddra_code(meddra_code: int, db: Session = Depends(get_db)):
-    result = db.query(FaersMale).filter(FaersMale.meddra_code == meddra_code).all()
+    result = query_ordered(db, FaersMale).filter(FaersMale.meddra_code == meddra_code).all()
     if not result:
         raise HTTPException(status_code=404, detail="meddra_code not found")
     return result
@@ -1019,20 +1024,20 @@ def read_faers_male_by_meddra_code(meddra_code: int, db: Session = Depends(get_d
 # CSV/TSV Export for faers_male
 @app.get("/faers_male/csv")
 def export_faers_male_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(FaersMale).offset(skip).limit(limit).all()
+    data = query_ordered(db, FaersMale).offset(skip).limit(limit).all()
     filename = generate_filename("faers_male", "csv")
     return create_csv_response(data, filename)
 
 @app.get("/faers_male/tsv")
 def export_faers_male_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
-    data = db.query(FaersMale).offset(skip).limit(limit).all()
+    data = query_ordered(db, FaersMale).offset(skip).limit(limit).all()
     filename = generate_filename("faers_male", "tsv")
     return create_tsv_response(data, filename)
 
 # Filtered CSV/TSV Export for faers_male
 @app.get("/faers_male/id/{id}/csv")
 def export_faers_male_by_id_csv(id: int, db: Session = Depends(get_db)):
-    data = db.query(FaersMale).filter(FaersMale.id == id).all()
+    data = query_ordered(db, FaersMale).filter(FaersMale.id == id).all()
     if not data:
         raise HTTPException(status_code=404, detail="id not found")
     filename = generate_filename("faers_male_id", "csv")
@@ -1040,7 +1045,7 @@ def export_faers_male_by_id_csv(id: int, db: Session = Depends(get_db)):
 
 @app.get("/faers_male/id/{id}/tsv")
 def export_faers_male_by_id_tsv(id: int, db: Session = Depends(get_db)):
-    data = db.query(FaersMale).filter(FaersMale.id == id).all()
+    data = query_ordered(db, FaersMale).filter(FaersMale.id == id).all()
     if not data:
         raise HTTPException(status_code=404, detail="id not found")
     filename = generate_filename("faers_male_id", "tsv")
@@ -1048,7 +1053,7 @@ def export_faers_male_by_id_tsv(id: int, db: Session = Depends(get_db)):
 
 @app.get("/faers_male/struct_id/{struct_id}/csv")
 def export_faers_male_by_struct_id_csv(struct_id: int, db: Session = Depends(get_db)):
-    data = db.query(FaersMale).filter(FaersMale.struct_id == struct_id).all()
+    data = query_ordered(db, FaersMale).filter(FaersMale.struct_id == struct_id).all()
     if not data:
         raise HTTPException(status_code=404, detail="struct_id not found")
     filename = generate_filename("faers_male_struct_id", "csv")
@@ -1056,7 +1061,7 @@ def export_faers_male_by_struct_id_csv(struct_id: int, db: Session = Depends(get
 
 @app.get("/faers_male/struct_id/{struct_id}/tsv")
 def export_faers_male_by_struct_id_tsv(struct_id: int, db: Session = Depends(get_db)):
-    data = db.query(FaersMale).filter(FaersMale.struct_id == struct_id).all()
+    data = query_ordered(db, FaersMale).filter(FaersMale.struct_id == struct_id).all()
     if not data:
         raise HTTPException(status_code=404, detail="struct_id not found")
     filename = generate_filename("faers_male_struct_id", "tsv")
@@ -1065,7 +1070,7 @@ def export_faers_male_by_struct_id_tsv(struct_id: int, db: Session = Depends(get
 @app.get("/faers_male/meddra_name/{meddra_name}/csv")
 def export_faers_male_by_meddra_name_csv(meddra_name: str, db: Session = Depends(get_db)):
     decoded_meddra_name = unquote(meddra_name)
-    data = db.query(FaersMale).filter(func.trim(FaersMale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
+    data = query_ordered(db, FaersMale).filter(func.trim(FaersMale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_name not found")
     filename = generate_filename("faers_male_meddra_name", "csv")
@@ -1074,7 +1079,7 @@ def export_faers_male_by_meddra_name_csv(meddra_name: str, db: Session = Depends
 @app.get("/faers_male/meddra_name/{meddra_name}/tsv")
 def export_faers_male_by_meddra_name_tsv(meddra_name: str, db: Session = Depends(get_db)):
     decoded_meddra_name = unquote(meddra_name)
-    data = db.query(FaersMale).filter(func.trim(FaersMale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
+    data = query_ordered(db, FaersMale).filter(func.trim(FaersMale.meddra_name).ilike(f"%{decoded_meddra_name}%")).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_name not found")
     filename = generate_filename("faers_male_meddra_name", "tsv")
@@ -1082,7 +1087,7 @@ def export_faers_male_by_meddra_name_tsv(meddra_name: str, db: Session = Depends
 
 @app.get("/faers_male/meddra_code/{meddra_code}/csv")
 def export_faers_male_by_meddra_code_csv(meddra_code: int, db: Session = Depends(get_db)):
-    data = db.query(FaersMale).filter(FaersMale.meddra_code == meddra_code).all()
+    data = query_ordered(db, FaersMale).filter(FaersMale.meddra_code == meddra_code).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_code not found")
     filename = generate_filename("faers_male_meddra_code", "csv")
@@ -1090,7 +1095,7 @@ def export_faers_male_by_meddra_code_csv(meddra_code: int, db: Session = Depends
 
 @app.get("/faers_male/meddra_code/{meddra_code}/tsv")
 def export_faers_male_by_meddra_code_tsv(meddra_code: int, db: Session = Depends(get_db)):
-    data = db.query(FaersMale).filter(FaersMale.meddra_code == meddra_code).all()
+    data = query_ordered(db, FaersMale).filter(FaersMale.meddra_code == meddra_code).all()
     if not data:
         raise HTTPException(status_code=404, detail="meddra_code not found")
     filename = generate_filename("faers_male_meddra_code", "tsv")
