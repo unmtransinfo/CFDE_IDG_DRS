@@ -1,0 +1,47 @@
+# Exclude Pharos_API directory
+Pharos_API/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual environments
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Git
+.git/
+.gitignore
+
+# Documentation
+*.pdf
+doc/
+README.md
+
+# Environment files
+.env
+.env.local
+*.env
+
+# Test files
+test/
+tests/
+*.test.py
+
+# Misc
+*.log
+*.md
+.DS_Store
