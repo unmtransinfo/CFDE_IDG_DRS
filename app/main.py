@@ -30,7 +30,7 @@ from app.models import PkAz
 from app.database import SessionLocal
 from app.csv_utils import create_csv_response, create_tsv_response, generate_filename
 from urllib.parse import unquote
-from sqlalchemy import func, text
+from sqlalchemy import any_, func, text
 from typing import List
 
 app = FastAPI(title="DrugCentral DRS API")
@@ -100,8 +100,9 @@ def read_act_table_full_by_target_class(target_class: str, db: Session = Depends
 
 @app.get("/act_table_full/accession/{accession}")
 def read_act_table_full_by_accession(accession: str, db: Session = Depends(get_db)):
+    """Exact match (case-insensitive) on any entry of the pipe-separated list, e.g. P02919 matches 'P02918|P02919|...'."""
     decoded_accession = unquote(accession)
-    result = query_ordered(db, ActTableFull).filter(func.trim(ActTableFull.accession).ilike(f"%{decoded_accession}%")).all()
+    result = query_ordered(db, ActTableFull).filter(decoded_accession.strip().upper() == any_(func.string_to_array(ActTableFull.accession, "|"))).all()
     if not result:
         raise HTTPException(status_code=404, detail="accession not found")
     return result
@@ -116,8 +117,9 @@ def read_act_table_full_by_gene(gene: str, db: Session = Depends(get_db)):
 
 @app.get("/act_table_full/swissprot/{swissprot}")
 def read_act_table_full_by_swissprot(swissprot: str, db: Session = Depends(get_db)):
+    """Exact match (case-insensitive) on any entry of the pipe-separated list, e.g. PBPB_ECOLI."""
     decoded_swissprot = unquote(swissprot)
-    result = query_ordered(db, ActTableFull).filter(func.trim(ActTableFull.swissprot).ilike(f"%{decoded_swissprot}%")).all()
+    result = query_ordered(db, ActTableFull).filter(decoded_swissprot.strip().upper() == any_(func.string_to_array(ActTableFull.swissprot, "|"))).all()
     if not result:
         raise HTTPException(status_code=404, detail="swissprot not found")
     return result
@@ -189,8 +191,9 @@ def read_structures_by_smiles(smiles: str, db: Session = Depends(get_db)):
 
 @app.get("/structures/inchikey/{inchikey}")
 def read_structures_by_inchikey(inchikey: str, db: Session = Depends(get_db)):
+    """Exact match (case-insensitive), e.g. LIOLIMKSCNQPLV-UHFFFAOYSA-N."""
     decoded_inchikey = unquote(inchikey)
-    result = query_ordered(db, Structures).filter(func.trim(Structures.inchikey).ilike(f"%{decoded_inchikey}%")).all()
+    result = query_ordered(db, Structures).filter(Structures.inchikey == decoded_inchikey.strip().upper()).all()
     if not result:
         raise HTTPException(status_code=404, detail="inchikey not found")
     return result
@@ -225,8 +228,9 @@ def read_identifier_by_id(id: int, db: Session = Depends(get_db)):
 
 @app.get("/identifier/identifier/{identifier}")
 def read_identifier_by_identifier(identifier: str, db: Session = Depends(get_db)):
+    """Exact match, ignoring case and surrounding spaces, e.g. CHEMBL3188267."""
     decoded_identifier = unquote(identifier)
-    result = query_ordered(db, Identifier).filter(func.trim(Identifier.identifier).ilike(f"%{decoded_identifier}%")).all()
+    result = query_ordered(db, Identifier).filter(func.upper(func.trim(Identifier.identifier)) == decoded_identifier.strip().upper()).all()
     if not result:
         raise HTTPException(status_code=404, detail="identifier not found")
     return result
@@ -343,16 +347,18 @@ def read_target_component_by_id(id: int, db: Session = Depends(get_db)):
 
 @app.get("/target_component/accession/{accession}")
 def read_target_component_by_accession(accession: str, db: Session = Depends(get_db)):
+    """Exact match (case-insensitive) on the UniProt accession, e.g. P08581."""
     decoded_accession = unquote(accession)
-    result = query_ordered(db, TargetComponent).filter(func.trim(TargetComponent.accession).ilike(f"%{decoded_accession}%")).all()
+    result = query_ordered(db, TargetComponent).filter(TargetComponent.accession == decoded_accession.strip().upper()).all()
     if not result:
         raise HTTPException(status_code=404, detail="accession not found")
     return result
 
 @app.get("/target_component/swissprot/{swissprot}")
 def read_target_component_by_swissprot(swissprot: str, db: Session = Depends(get_db)):
+    """Exact match (case-insensitive) on the SwissProt name, e.g. MET_HUMAN."""
     decoded_swissprot = unquote(swissprot)
-    result = query_ordered(db, TargetComponent).filter(func.trim(TargetComponent.swissprot).ilike(f"%{decoded_swissprot}%")).all()
+    result = query_ordered(db, TargetComponent).filter(TargetComponent.swissprot == decoded_swissprot.strip().upper()).all()
     if not result:
         raise HTTPException(status_code=404, detail="swissprot not found")
     return result
@@ -415,8 +421,9 @@ def read_target_go(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)
 
 @app.get("/target_go/id/{id}")
 def read_target_go_by_id(id: str, db: Session = Depends(get_db)):
+    """Exact match (case-insensitive) on the GO id, e.g. GO:0005737."""
     decoded_id = unquote(id)
-    result = query_ordered(db, TargetGo).filter(func.trim(TargetGo.id).ilike(f"%{decoded_id}%")).all()
+    result = query_ordered(db, TargetGo).filter(TargetGo.id == decoded_id.strip().upper()).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -437,8 +444,9 @@ def read_target_keyword(skip: int = 0, limit: int = 10, db: Session = Depends(ge
 
 @app.get("/target_keyword/id/{id}")
 def read_target_keyword_by_id(id: str, db: Session = Depends(get_db)):
+    """Exact match (case-insensitive) on the UniProt keyword id, e.g. KW-0001."""
     decoded_id = unquote(id)
-    result = query_ordered(db, TargetKeyword).filter(func.trim(TargetKeyword.id).ilike(f"%{decoded_id}%")).all()
+    result = query_ordered(db, TargetKeyword).filter(TargetKeyword.id == decoded_id.strip().upper()).all()
     if not result:
         raise HTTPException(status_code=404, detail="id not found")
     return result
@@ -494,8 +502,9 @@ def read_tdgo2tc_by_id(id: int, db: Session = Depends(get_db)):
 
 @app.get("/tdgo2tc/go_id/{go_id}")
 def read_tdgo2tc_by_go_id(go_id: str, db: Session = Depends(get_db)):
+    """Exact match (case-insensitive) on the GO id, e.g. GO:0005737."""
     decoded_go_id = unquote(go_id)
-    result = query_ordered(db, Tdgo2tc).filter(func.trim(Tdgo2tc.go_id).ilike(f"%{decoded_go_id}%")).all()
+    result = query_ordered(db, Tdgo2tc).filter(Tdgo2tc.go_id == decoded_go_id.strip().upper()).all()
     if not result:
         raise HTTPException(status_code=404, detail="go_id not found")
     return result
@@ -523,8 +532,9 @@ def read_tdkey2tc_by_id(id: int, db: Session = Depends(get_db)):
 
 @app.get("/tdkey2tc/tdkey_id/{tdkey_id}")
 def read_tdkey2tc_by_tdkey_id(tdkey_id: str, db: Session = Depends(get_db)):
+    """Exact match (case-insensitive) on the UniProt keyword id, e.g. KW-0001."""
     decoded_tdkey_id = unquote(tdkey_id)
-    result = query_ordered(db, Tdkey2tc).filter(func.trim(Tdkey2tc.tdkey_id).ilike(f"%{decoded_tdkey_id}%")).all()
+    result = query_ordered(db, Tdkey2tc).filter(Tdkey2tc.tdkey_id == decoded_tdkey_id.strip().upper()).all()
     if not result:
         raise HTTPException(status_code=404, detail="tdkey_id not found")
     return result
@@ -582,8 +592,9 @@ def read_omop_relationship_by_concept_name(concept_name: str, db: Session = Depe
 
 @app.get("/omop_relationship/umls_cui/{umls_cui}")
 def read_omop_relationship_by_umls_cui(umls_cui: str, db: Session = Depends(get_db)):
+    """Exact match (case-insensitive) on the UMLS CUI, e.g. C0000737."""
     decoded_umls_cui = unquote(umls_cui)
-    result = query_ordered(db, OmopRelationship).filter(func.trim(OmopRelationship.umls_cui).ilike(f"%{decoded_umls_cui}%")).all()
+    result = query_ordered(db, OmopRelationship).filter(OmopRelationship.umls_cui == decoded_umls_cui.strip().upper()).all()
     if not result:
         raise HTTPException(status_code=404, detail="umls_cui not found")
     return result
@@ -619,8 +630,9 @@ def read_product_by_id(id: int, db: Session = Depends(get_db)):
 
 @app.get("/product/ndc_product_code/{ndc_product_code}")
 def read_product_by_ndc_product_code(ndc_product_code: str, db: Session = Depends(get_db)):
+    """Exact match on the NDC product code, e.g. 0002-0152."""
     decoded_ndc_product_code = unquote(ndc_product_code)
-    result = query_ordered(db, Product).filter(func.trim(Product.ndc_product_code).ilike(f"%{decoded_ndc_product_code}%")).all()
+    result = query_ordered(db, Product).filter(Product.ndc_product_code == decoded_ndc_product_code.strip()).all()
     if not result:
         raise HTTPException(status_code=404, detail="ndc_product_code not found")
     return result
@@ -691,8 +703,9 @@ def read_atc_by_id(id: int, db: Session = Depends(get_db)):
 
 @app.get("/atc/code/{code}")
 def read_atc_by_code(code: str, db: Session = Depends(get_db)):
+    """ATC code prefix: a full 7-character code matches exactly; a shorter code (e.g. N02B) returns that ATC group."""
     decoded_code = unquote(code)
-    result = query_ordered(db, Atc).filter(func.trim(Atc.code).ilike(f"%{decoded_code}%")).all()
+    result = query_ordered(db, Atc).filter(Atc.code.startswith(decoded_code.strip().upper(), autoescape=True)).all()
     if not result:
         raise HTTPException(status_code=404, detail="code not found")
     return result
@@ -720,8 +733,9 @@ def read_struct2atc_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
 
 @app.get("/struct2atc/atc_code/{atc_code}")
 def read_struct2atc_by_atc_code(atc_code: str, db: Session = Depends(get_db)):
+    """ATC code prefix: a full 7-character code matches exactly; a shorter code (e.g. N02B) returns that ATC group."""
     decoded_atc_code = unquote(atc_code)
-    result = query_ordered(db, Struct2atc).filter(func.trim(Struct2atc.atc_code).ilike(f"%{decoded_atc_code}%")).all()
+    result = query_ordered(db, Struct2atc).filter(Struct2atc.atc_code.startswith(decoded_atc_code.strip().upper(), autoescape=True)).all()
     if not result:
         raise HTTPException(status_code=404, detail="atc_code not found")
     return result
