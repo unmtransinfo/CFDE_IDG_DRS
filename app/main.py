@@ -26,6 +26,7 @@ from app.models import Doid
 from app.models import Faers
 from app.models import FaersFemale
 from app.models import FaersMale
+from app.models import PkAz
 from app.database import SessionLocal
 from app.csv_utils import create_csv_response, create_tsv_response, generate_filename
 from urllib.parse import unquote
@@ -1094,6 +1095,79 @@ def export_faers_male_by_meddra_code_tsv(meddra_code: int, db: Session = Depends
         raise HTTPException(status_code=404, detail="meddra_code not found")
     filename = generate_filename("faers_male_meddra_code", "tsv")
     return create_tsv_response(data, filename)
+
+
+# Table 23: pk_az (predictions from AstraZeneca models, not measured values)
+def query_pk_az_by_struct_id(db: Session, struct_id: int):
+    result = db.query(PkAz).filter(PkAz.struct_id == struct_id).order_by(PkAz.type).all()
+    if not result:
+        raise HTTPException(status_code=404, detail="struct_id not found")
+    return result
+
+def query_pk_az_by_type(db: Session, type: str):
+    decoded_type = unquote(type)
+    result = db.query(PkAz).filter(func.lower(PkAz.type) == decoded_type.lower()).order_by(PkAz.struct_id).all()
+    if not result:
+        raise HTTPException(status_code=404, detail="type not found")
+    return result
+
+@app.get("/pk_az")
+def read_pk_az(skip: int = 0, limit: int = 10, db: Session = Depends(get_db)):
+    """
+    Predicted pharmacokinetic, toxicological, and safety properties for drugs, from predictive
+    models developed and released by researchers at AstraZeneca. Values are model predictions,
+    not measurements.
+
+    - **struct_id**: drug identifier referencing structures.id
+    - **type**: property type, e.g. `herg`, `hppb`, `solubility-dd`, `kinase-safety-class`
+    - **value**: predicted numeric value; for the kinase safety/selectivity classes, the number of
+      predicted kinase hits; for `pfas-class`, 1 = PFAS structural alert, 0 = none
+    - **unit**: unit of the predicted property (empty for unitless types)
+    - **description**: description of the property; for the kinase classes, the predicted kinase hits
+    - **similarity**: Tanimoto similarity to the nearest compound in the model training set
+    - **confidence**: `Moderate` for similarity 0.65-0.79, `High` for 0.8-1.0; empty for the `-class` types
+    """
+    return db.query(PkAz).order_by(PkAz.struct_id, PkAz.type).offset(skip).limit(limit).all()
+
+@app.get("/pk_az/struct_id/{struct_id}")
+def read_pk_az_by_struct_id(struct_id: int, db: Session = Depends(get_db)):
+    """All predicted properties for one drug."""
+    return query_pk_az_by_struct_id(db, struct_id)
+
+@app.get("/pk_az/type/{type}")
+def read_pk_az_by_type(type: str, db: Session = Depends(get_db)):
+    """Predictions of one property type for all drugs (exact match, case-insensitive), e.g. `herg`."""
+    return query_pk_az_by_type(db, type)
+
+# CSV/TSV Export for pk_az
+@app.get("/pk_az/csv")
+def export_pk_az_csv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(PkAz).order_by(PkAz.struct_id, PkAz.type).offset(skip).limit(limit).all()
+    filename = generate_filename("pk_az", "csv")
+    return create_csv_response(data, filename)
+
+@app.get("/pk_az/tsv")
+def export_pk_az_tsv(skip: int = 0, limit: int = 1000, db: Session = Depends(get_db)):
+    data = db.query(PkAz).order_by(PkAz.struct_id, PkAz.type).offset(skip).limit(limit).all()
+    filename = generate_filename("pk_az", "tsv")
+    return create_tsv_response(data, filename)
+
+# Filtered CSV/TSV Export for pk_az
+@app.get("/pk_az/struct_id/{struct_id}/csv")
+def export_pk_az_by_struct_id_csv(struct_id: int, db: Session = Depends(get_db)):
+    return create_csv_response(query_pk_az_by_struct_id(db, struct_id), generate_filename("pk_az_struct_id", "csv"))
+
+@app.get("/pk_az/struct_id/{struct_id}/tsv")
+def export_pk_az_by_struct_id_tsv(struct_id: int, db: Session = Depends(get_db)):
+    return create_tsv_response(query_pk_az_by_struct_id(db, struct_id), generate_filename("pk_az_struct_id", "tsv"))
+
+@app.get("/pk_az/type/{type}/csv")
+def export_pk_az_by_type_csv(type: str, db: Session = Depends(get_db)):
+    return create_csv_response(query_pk_az_by_type(db, type), generate_filename("pk_az_type", "csv"))
+
+@app.get("/pk_az/type/{type}/tsv")
+def export_pk_az_by_type_tsv(type: str, db: Session = Depends(get_db)):
+    return create_tsv_response(query_pk_az_by_type(db, type), generate_filename("pk_az_type", "tsv"))
 
 
 

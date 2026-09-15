@@ -1130,6 +1130,25 @@ class PharmaClass(Base):
     struct: Mapped[Optional['Structures']] = relationship('Structures', back_populates='pharma_class')
 
 
+class PkAz(Base):
+    __tablename__ = 'pk_az'
+    __table_args__ = (
+        ForeignKeyConstraint(['struct_id'], ['structures.id'], name='pk_az_2_struct'),
+        PrimaryKeyConstraint('struct_id', 'type', name='pk_az_pk'),
+        Index('SQL0000000001-6b91c056-01a0-5cd4-6f3c-00001f600000', 'struct_id'),
+        Index('pk_az_idx_type_value', 'type', 'value'),
+        {'comment': 'predicted pharmacokinetic, toxicological, and safety properties for drugs'}
+    )
+
+    struct_id: Mapped[int] = mapped_column(Integer, primary_key=True, comment='drug identifier referencing structures.id')
+    type: Mapped[str] = mapped_column(String(32), primary_key=True, comment='predicted pharmacokinetic, toxicological, or safety property type')
+    value: Mapped[float] = mapped_column(Double(53), comment='predicted numeric property value')
+    unit: Mapped[Optional[str]] = mapped_column(String(32), comment='unit of the predicted property')
+    description: Mapped[Optional[str]] = mapped_column(String(4000), comment='description of the predicted property; for kinase safety/selectivity classes, predicted kinase hits')
+    similarity: Mapped[Optional[float]] = mapped_column(Double(53), comment='Tanimoto similarity to the nearest compound in the model training set')
+    confidence: Mapped[Optional[str]] = mapped_column(String(16), comment='prediction confidence based on similarity: moderate for 0.65-0.79 and high for 0.8-1.0')
+
+
 class Pka(Base):
     __tablename__ = 'pka'
     __table_args__ = (
