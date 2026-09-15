@@ -20,6 +20,7 @@ engine = create_engine(
         "connect_timeout": CONNECT_TIMEOUT_SECONDS,
         "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}",
     },
+    pool_timeout=10,  # wait at most 10s for a free pooled connection
     pool_pre_ping=True,  # check a pooled connection is alive before using it
     pool_recycle=1800,  # replace connections older than 30 minutes
 )

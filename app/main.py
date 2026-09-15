@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 from psycopg2.errors import QueryCanceled
-from sqlalchemy.exc import OperationalError
+from sqlalchemy.exc import OperationalError, TimeoutError as PoolTimeoutError
 from sqlalchemy.orm import Session
 from app.models import ActTableFull
 from app.models import Structures
@@ -48,6 +48,11 @@ async def database_error_handler(request: Request, exc: OperationalError):
     if isinstance(exc.orig, QueryCanceled):
         return JSONResponse(status_code=504, content={"detail": "Database query timed out"})
     return JSONResponse(status_code=503, content={"detail": "Database unavailable"})
+
+# Every pooled connection is in use and pool_timeout expired (see app/database.py).
+@app.exception_handler(PoolTimeoutError)
+async def database_busy_handler(request: Request, exc: PoolTimeoutError):
+    return JSONResponse(status_code=503, content={"detail": "Database busy, try again later"})
 
 # check if server is running ok
 @app.get("/")
