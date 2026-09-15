@@ -83,6 +83,11 @@ This script will:
    - Healthy threshold: **1**
    - Unhealthy threshold: **3**
 
+   `/` only checks that the API process is up. `/health` also checks the database and returns
+   503 when it is unreachable. If App Runner's health check uses `/health`, App Runner will keep
+   replacing instances during a database outage (which does not fix it), so consider keeping
+   `/` here and pointing an external monitor or CloudWatch alarm at `/health` instead.
+
 8. Click **"Create & deploy"**
 
 #### Option B: Using AWS CLI
@@ -168,6 +173,30 @@ When you update your code:
    ```
 
 ## Database Considerations
+
+### Loading DrugCentral into the target database
+
+The API needs a PostgreSQL database with the DrugCentral data (dbversion 56 or newer) and a
+read-only user. With an admin connection string `$ADMIN_URL`:
+
+1. Restore the official DrugCentral dump (plain SQL, about 4 GB restored):
+   ```bash
+   zcat drugcentral.dump.09022026.sql.gz | psql "$ADMIN_URL" -v ON_ERROR_STOP=1 -q -o /dev/null
+   ```
+   The dump begins with `DROP SCHEMA public` / `CREATE SCHEMA public`. On a managed database
+   where the admin user does not own the `public` schema, that step can fail; check before a
+   long restore.
+2. Add the indexes the API's lookups need:
+   ```bash
+   psql "$ADMIN_URL" -f db/indexes.sql
+   ```
+3. Create the read-only API user (the password is supplied here, not stored in the file):
+   ```bash
+   psql "$ADMIN_URL" -v api_password='<password>' -f db/api_readonly_role.sql
+   ```
+4. Set `DATABASE_URL=postgresql://drs_readonly:<password>@<host>:<port>/<dbname>` for the API.
+
+`scripts/restore_local_db.sh` performs the same steps for a local Docker database.
 
 ### Option 1: AWS RDS PostgreSQL (Recommended)
 

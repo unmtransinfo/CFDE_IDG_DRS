@@ -2,129 +2,164 @@
 
 A RESTful API providing access to the DrugCentral database with support for JSON, CSV, and TSV export formats.
 
-**Live API:** https://uxn2ycvimg.us-east-2.awsapprunner.com
+> **Version 2 (this repository)** serves the updated DrugCentral database, **dbversion 56 (2026-09-02)**.
+> It has not been deployed yet; its public URL will be added here after deployment.
+> The currently live API (v1) serves the legacy database (dbversion 54, 2023-11-01) at
+> https://uxn2ycvimg.us-east-2.awsapprunner.com.
 
 ## Overview
 
-The DrugCentral DRS (Data Repository Service) API provides programmatic access to comprehensive drug information from the DrugCentral database. This API enables researchers, developers, and data scientists to query drug structures, activities, targets, products, and synonyms through a standardized REST interface.
+The DrugCentral DRS (Data Repository Service) API provides programmatic access to comprehensive drug information from the DrugCentral database. This API enables researchers, developers, and data scientists to query drug structures, activities, targets, products, synonyms, adverse events, and predicted drug properties through a standardized REST interface.
 
-## Base URL
+## What's new in v2
 
-```
-https://uxn2ycvimg.us-east-2.awsapprunner.com
-```
+- **Updated data:** DrugCentral dbversion 56, with 121 drugs added since dbversion 54.
+- **`pk_az` endpoints:** predicted pharmacokinetic, toxicological and safety properties from AstraZeneca's models ([details](#pk_az-predicted-properties)).
+- **`/health` endpoint:** checks the database and reports the data version.
+- **Clear errors when the database has problems:** `503` when it is unreachable or busy, `504` when a query runs longer than 30 seconds, instead of requests hanging.
+- **Exact identifier matching:** identifiers such as InChIKeys and UniProt accessions match exactly (case-insensitive) instead of as substrings ([matching rules](#matching-rules)).
+- **Stable ordering:** every list, export and lookup is sorted by the table's primary key, so `skip`/`limit` pages are repeatable.
 
 ## Quick Start
 
-### Check API Status
+In the examples, `$API` is the base URL, e.g. `http://127.0.0.1:8000` when [running locally](#running-locally).
+
+### Check API and database status
 
 ```bash
-curl https://uxn2ycvimg.us-east-2.awsapprunner.com/
+curl $API/          # {"status":"ok"}  - the API process is up
+curl $API/health    # {"status":"ok","database":"ok","dbversion":56} - 503 if the database is unreachable
 ```
 
-Response:
-```json
-{"status": "ok"}
-```
-
-### Get Data in JSON Format
+### Get data in JSON format
 
 ```bash
-# Get 5 structures
-curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/structures?limit=5"
-
-# Get activities with pagination
-curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/act_table_full?skip=10&limit=20"
+curl "$API/structures?limit=5"                                  # first 5 structures
+curl "$API/structures/inchikey/LIOLIMKSCNQPLV-UHFFFAOYSA-N"     # capmatinib by InChIKey
+curl "$API/act_table_full/struct_id/5392"                       # capmatinib's bioactivities
+curl "$API/pk_az/struct_id/4"                                   # all predicted properties of one drug
 ```
 
-### Export Data in CSV Format
+### Export CSV / TSV
 
 ```bash
-# Export structures as CSV
-curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/structures/csv?limit=100" -o structures.csv
-
-# Export target components as CSV
-curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/target_component/csv?limit=50" -o targets.csv
-```
-
-### Export Data in TSV Format
-
-```bash
-# Export products as TSV
-curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/product/tsv?limit=100" -o products.tsv
-
-# Export synonyms as TSV
-curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/synonyms/tsv?limit=200" -o synonyms.tsv
+curl "$API/structures/csv?limit=100" -o structures.csv
+curl "$API/pk_az/type/herg/tsv" -o herg_predictions.tsv
 ```
 
 ## Available Endpoints
 
-### JSON Endpoints
+The complete, interactive list is at `$API/docs` (OpenAPI schema at `$API/openapi.json`).
 
-All JSON endpoints support pagination via `skip` and `limit` parameters (default limit: 10).
+| Pattern | Description |
+|---|---|
+| `/` | API process status (does not touch the database) |
+| `/health` | Database status and data version |
+| `/{table}?skip=0&limit=10` | Rows of a table, ordered by primary key |
+| `/{table}/{column}/{value}` | Rows where a column matches a value ([matching rules](#matching-rules)); 404 if none |
+| `/{table}/csv`, `/{table}/tsv` | Export rows as CSV/TSV (`skip`/`limit`, default limit 1000) |
+| `/{table}/{column}/{value}/csv`, `.../tsv` | Export a lookup's results (FAERS and pk_az tables) |
 
-| Endpoint | Description | Example |
-|----------|-------------|---------|
-| `/` | Health check | `curl https://uxn2ycvimg.us-east-2.awsapprunner.com/` |
-| `/structures` | Chemical structures | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/structures?limit=5"` |
-| `/act_table_full` | Activity data | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/act_table_full?limit=5"` |
-| `/target_component` | Target components | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/target_component?limit=5"` |
-| `/product` | Drug products | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/product?limit=5"` |
-| `/synonyms` | Drug synonyms | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/synonyms?limit=5"` |
+**Tables:** `act_table_full`, `structures`, `identifier`, `id_type`, `synonyms`, `target_class`, `target_component`, `target_dictionary`, `target_go`, `target_keyword`, `td2tc`, `tdgo2tc`, `tdkey2tc`, `omop_relationship`, `product`, `struct2obprod`, `atc`, `struct2atc`, `drug_class`, `faers`, `faers_female`, `faers_male`, `pk_az`.
 
-### CSV Export Endpoints
+**CSV/TSV exports:** `act_table_full`, `structures` (without the multi-line `molfile`), `synonyms`, `target_component`, `product`, `faers`, `faers_female`, `faers_male`, `pk_az`.
 
-All CSV endpoints support pagination via `skip` and `limit` parameters (default limit: 1000).
+### pk_az: predicted properties
 
-| Endpoint | Description | Example |
-|----------|-------------|---------|
-| `/structures/csv` | Export structures as CSV | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/structures/csv?limit=100" -o structures.csv` |
-| `/act_table_full/csv` | Export activities as CSV | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/act_table_full/csv?limit=100" -o activities.csv` |
-| `/target_component/csv` | Export targets as CSV | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/target_component/csv?limit=100" -o targets.csv` |
-| `/product/csv` | Export products as CSV | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/product/csv?limit=100" -o products.csv` |
-| `/synonyms/csv` | Export synonyms as CSV | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/synonyms/csv?limit=100" -o synonyms.csv` |
+Predicted pharmacokinetic, toxicological, and safety properties for drugs, from predictive models developed and released by researchers at AstraZeneca. **Values are model predictions, not measurements.** There are 25 property types, e.g. `herg`, `hppb`, `solubility-dd`, `kinase-safety-class`.
 
-### TSV Export Endpoints
+| Endpoint | Returns |
+|---|---|
+| `/pk_az/struct_id/{id}` | All predictions for one drug |
+| `/pk_az/type/{type}` | One property type for all drugs (exact, case-insensitive) |
 
-All TSV endpoints support pagination via `skip` and `limit` parameters (default limit: 1000).
+| Column | Meaning |
+|---|---|
+| `struct_id` | Drug identifier (`structures.id`) |
+| `type` | Property type |
+| `value` | Predicted value; for the kinase safety/selectivity classes, the number of predicted kinase hits; for `pfas-class`, 1 = PFAS structural alert |
+| `unit` | Unit of the property (empty for unitless types) |
+| `description` | Description of the property; for the kinase classes, the predicted kinases |
+| `similarity` | Tanimoto similarity to the nearest compound in the model training set |
+| `confidence` | `Moderate` (similarity 0.65–0.79) or `High` (0.8–1.0); empty for the three `-class` types |
 
-| Endpoint | Description | Example |
-|----------|-------------|---------|
-| `/structures/tsv` | Export structures as TSV | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/structures/tsv?limit=100" -o structures.tsv` |
-| `/act_table_full/tsv` | Export activities as TSV | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/act_table_full/tsv?limit=100" -o activities.tsv` |
-| `/target_component/tsv` | Export targets as TSV | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/target_component/tsv?limit=100" -o targets.tsv` |
-| `/product/tsv` | Export products as TSV | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/product/tsv?limit=100" -o products.tsv` |
-| `/synonyms/tsv` | Export synonyms as TSV | `curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/synonyms/tsv?limit=100" -o synonyms.tsv` |
+## Matching rules
 
-## CSV/TSV Export Feature
-
-The API provides memory-efficient streaming export of data in CSV and TSV formats:
-
-- **Streaming Implementation**: Uses Python generators to stream data without loading entire datasets into memory
-- **Automatic Timestamps**: Downloaded files include timestamps in filenames (e.g., `structures_20231219_143022.csv`)
-- **Proper Content Headers**: Sets appropriate Content-Type and Content-Disposition headers for browser downloads
-- **Type Handling**: Correctly handles datetime objects (ISO format) and NULL values (empty strings)
-- **Pagination Support**: Use `skip` and `limit` parameters to control data ranges
+| Lookup | Rule |
+|---|---|
+| `/structures/inchikey`, `/target_component/accession` and `/swissprot`, `/omop_relationship/umls_cui`, `/target_go/id`, `/tdgo2tc/go_id`, `/target_keyword/id`, `/tdkey2tc/tdkey_id`, `/pk_az/type` | Exact, case-insensitive |
+| `/identifier/identifier` | Exact, ignoring case and surrounding spaces |
+| `/product/ndc_product_code` | Exact |
+| `/atc/code`, `/struct2atc/atc_code` | Prefix: a full code (`N02BE01`) is exact; a shorter code (`N02B`) returns that ATC group |
+| `/act_table_full/accession` and `/swissprot` | Exact match on any entry of the pipe-separated list (`P02919` matches `P02918\|P02919\|...`) |
+| Numeric columns (`/.../id/`, `/.../struct_id/`, ...) | Exact |
+| Names and free text (`/structures/name`, `/synonyms/name`, `/faers/meddra_name`, ...) | Case-insensitive substring |
 
 ## Query Parameters
 
-### Pagination
-
-All endpoints support pagination:
+List and export endpoints support pagination:
 
 - `skip` - Number of records to skip (default: 0)
-- `limit` - Maximum number of records to return
-  - JSON endpoints: default 10
-  - CSV/TSV endpoints: default 1000
+- `limit` - Maximum number of records to return (JSON default 10, CSV/TSV default 1000)
 
-Example:
+Rows are ordered by the table's primary key, so consecutive pages never overlap or skip rows.
+
 ```bash
-# Get records 100-200
-curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/structures?skip=100&limit=100"
-
-# Export first 5000 structures as CSV
-curl "https://uxn2ycvimg.us-east-2.awsapprunner.com/structures/csv?limit=5000" -o structures.csv
+curl "$API/structures?skip=100&limit=100"                       # records 100-199
+curl "$API/structures/csv?limit=5000" -o structures.csv          # first 5000 structures
 ```
+
+## CSV/TSV Export Feature
+
+- **Streaming**: rows are written to the response as they are formatted
+- **Automatic timestamps**: file names include a timestamp (e.g. `drugcentral_structures_20260915_143022.csv`)
+- **Download headers**: `Content-Type` and `Content-Disposition` are set for browser downloads
+- **Type handling**: datetimes in ISO format, NULL as empty, numbers unquoted, text quoted (safe for SMILES/InChI)
+
+## Errors
+
+| Status | Meaning |
+|---|---|
+| `404` | No rows match the lookup |
+| `422` | Invalid parameter, e.g. text where a number is expected |
+| `503` | Database unreachable, or all database connections are busy |
+| `504` | The query ran longer than 30 seconds |
+
+## Running Locally
+
+1. Install dependencies (Python 3.11+):
+   ```bash
+   python -m venv venv
+   venv/bin/pip install -r requirements-dev.txt
+   ```
+2. Get a database. With Docker, restore the official DrugCentral dump into a local container (about 15 minutes):
+   ```bash
+   scripts/restore_local_db.sh path/to/drugcentral.dump.09022026.sql.gz
+   ```
+   This starts Postgres on `127.0.0.1:5434`, adds the API's indexes (`db/indexes.sql`), creates a read-only user (`db/api_readonly_role.sql`) and writes `DATABASE_URL` to `.env`. To use another DrugCentral database instead, copy `.env.example` to `.env` and set `DATABASE_URL`.
+3. Start the API:
+   ```bash
+   venv/bin/uvicorn app.main:app --env-file .env
+   ```
+   Interactive docs: http://127.0.0.1:8000/docs
+
+## Tests
+
+Integration tests run against the database in `DATABASE_URL` (DrugCentral dbversion 56 or newer):
+
+```bash
+venv/bin/pytest
+```
+
+To call every endpoint several times against a running server and get a per-endpoint report:
+
+```bash
+venv/bin/python scripts/check_endpoints.py --base http://127.0.0.1:8000 --repeat 5
+```
+
+## Deployment
+
+See [DEPLOYMENT.md](DEPLOYMENT.md).
 
 ## Developer Information
 - Manjil Pradhan, BSc (University of New Mexico)
