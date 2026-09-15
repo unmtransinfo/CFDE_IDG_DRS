@@ -16,10 +16,9 @@ This guide will walk you through deploying the CFDE IDG DRS API to AWS App Runne
 
 ### Step 1: Configure Database Connection
 
-Before deploying, you need to update the database configuration:
-
-1. Edit `app/database.py` and add your database URL, OR
-2. Set it as an environment variable in AWS App Runner (recommended)
+The API reads its database connection from the `DATABASE_URL` environment variable
+and will not start without it. Set it in AWS App Runner (see Step 3); for local runs,
+copy `.env.example` to `.env` and fill it in.
 
 The DATABASE_URL format should be:
 ```
