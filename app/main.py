@@ -1,4 +1,7 @@
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
+from fastapi.responses import JSONResponse
+from psycopg2.errors import QueryCanceled
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from app.models import ActTableFull
 from app.models import Structures
@@ -26,7 +29,7 @@ from app.models import FaersMale
 from app.database import SessionLocal
 from app.csv_utils import create_csv_response, create_tsv_response, generate_filename
 from urllib.parse import unquote
-from sqlalchemy import func
+from sqlalchemy import func, text
 from typing import List
 
 app = FastAPI(title="DrugCentral DRS API")
@@ -38,10 +41,24 @@ def get_db():
     finally:
         db.close()
 
+# Database errors: return a clear status instead of a generic 500.
+# QueryCanceled means the query exceeded statement_timeout (see app/database.py).
+@app.exception_handler(OperationalError)
+async def database_error_handler(request: Request, exc: OperationalError):
+    if isinstance(exc.orig, QueryCanceled):
+        return JSONResponse(status_code=504, content={"detail": "Database query timed out"})
+    return JSONResponse(status_code=503, content={"detail": "Database unavailable"})
+
 # check if server is running ok
 @app.get("/")
 def root():
     return {"status": "ok"}
+
+# check that the database is reachable; returns 503 (via the handler above) when it is not
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    dbversion = db.execute(text("SELECT max(version) FROM dbversion")).scalar()
+    return {"status": "ok", "database": "ok", "dbversion": dbversion}
 
 # TABLE 1:  act_table_full
 @app.get("/act_table_full")
