@@ -78,10 +78,10 @@ Predicted pharmacokinetic, toxicological, and safety properties for drugs, from 
 | `struct_id` | Drug identifier (`structures.id`) |
 | `type` | Property type |
 | `value` | Predicted value; for the kinase safety/selectivity classes, the number of predicted kinase hits; for `pfas-class`, 1 = PFAS structural alert |
-| `unit` | Unit of the property (empty for unitless types) |
+| `unit` | Unit of the property, or `null`. For some types (`mh-clint`, `mppb`) the unit is missing in the source data rather than the property being unitless |
 | `description` | Description of the property; for the kinase classes, the predicted kinases |
 | `similarity` | Tanimoto similarity to the nearest compound in the model training set |
-| `confidence` | `Moderate` (similarity 0.65–0.79) or `High` (0.8–1.0); empty for the three `-class` types |
+| `confidence` | `Moderate` (similarity 0.65–0.79) or `High` (0.8–1.0). With `similarity`, it is `null` only for `kinase-safety-class`, `kinase-selectivity-class` and `pfas-class`; `pld-class` has both, despite its name |
 
 ## Matching rules
 
@@ -95,6 +95,10 @@ Predicted pharmacokinetic, toxicological, and safety properties for drugs, from 
 | Numeric columns (`/.../id/`, `/.../struct_id/`, ...) | Exact |
 | Names and free text (`/structures/name`, `/synonyms/name`, `/faers/meddra_name`, ...) | Case-insensitive substring |
 
+In substring searches, `%` and `_` are matched as ordinary characters, not as SQL wildcards.
+
+**Known limitation:** a value containing a forward slash (for example the gene `UNQ5815/PRO19632`) cannot be looked up, because it splits the URL path. Use a different column, such as an id, for those rows.
+
 ## Query Parameters
 
 List and export endpoints support pagination:
@@ -103,6 +107,8 @@ List and export endpoints support pagination:
 - `limit` - Maximum number of records to return (JSON default 10, CSV/TSV default 1000)
 
 Rows are ordered by the table's primary key, so consecutive pages never overlap or skip rows.
+
+`skip` must be between 0 and 100,000,000 and `limit` between 0 and 1,000,000; anything else, including negative or non-numeric values, returns `422`. The maximum limit is larger than the biggest table, so whole-table exports are unaffected.
 
 ```bash
 curl "$API/structures?skip=100&limit=100"                       # records 100-199
@@ -121,7 +127,7 @@ curl "$API/structures/csv?limit=5000" -o structures.csv          # first 5000 st
 | Status | Meaning |
 |---|---|
 | `404` | No rows match the lookup |
-| `422` | Invalid parameter, e.g. text where a number is expected |
+| `422` | Invalid parameter: wrong type, out of range, or a NUL character in the path |
 | `503` | Database unreachable, or all database connections are busy |
 | `504` | The query ran longer than 30 seconds |
 
