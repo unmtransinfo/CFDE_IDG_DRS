@@ -1,0 +1,50 @@
+# DrugCentral DRS API v2 on chiltepin: the API and its database.
+#
+#   docker compose -f deploy/chiltepin/compose.yml up -d
+#
+# The API is published on 127.0.0.1:8007 only; Apache proxies
+# https://chiltepin.health.unm.edu/drs/ to it (apache-drugcentral-drs-api.conf).
+name: drugcentral-drs
+
+services:
+  db:
+    image: postgres:14
+    container_name: drugcentral-v56
+    restart: unless-stopped
+    command: ["postgres", "-c", "maintenance_work_mem=1GB", "-c", "max_wal_size=4GB"]
+    environment:
+      POSTGRES_DB: drugcentral
+      # Only used when initialising an empty volume; the volume below is already restored.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/chiltepin/.env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5434:5432"   # local admin and tests only
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -q -U postgres -d drugcentral"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+
+  api:
+    image: drugcentral-drs-api:v2-local
+    build:
+      context: ../..
+    container_name: drugcentral-drs-api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # postgresql://drs_readonly:<password>@db:5432/drugcentral
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in deploy/chiltepin/.env}
+    # --root-path makes /docs and /openapi.json work under the /drs prefix Apache serves.
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",
+              "--root-path", "/drs", "--proxy-headers", "--forwarded-allow-ips", "*"]
+    ports:
+      - "127.0.0.1:8007:8000"
+
+volumes:
+  pgdata:
+    external: true
+    name: drugcentral-v56-data
