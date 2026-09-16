@@ -127,6 +127,9 @@ curl "$API/structures/csv?limit=5000" -o structures.csv          # first 5000 st
 
 ## Running Locally
 
+For a step-by-step walkthrough, including example requests, tests and troubleshooting, see
+[GETTING_STARTED.md](GETTING_STARTED.md). In short:
+
 1. Install dependencies (Python 3.11+):
    ```bash
    python -m venv venv
