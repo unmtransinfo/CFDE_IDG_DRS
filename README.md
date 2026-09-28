@@ -141,11 +141,11 @@ For a step-by-step walkthrough, including example requests, tests and troublesho
    python -m venv venv
    venv/bin/pip install -r requirements-dev.txt
    ```
-2. Get a database. With Docker, restore the official DrugCentral dump into a local container (about 15 minutes):
+2. Get a database. With Docker, restore the DrugCentral dataset dump into a local container (about 15 minutes):
    ```bash
-   scripts/restore_local_db.sh path/to/drugcentral.dump.09022026.sql.gz
+   scripts/restore_local_db.sh path/to/Drugcentral_2026-09-25.pgdump
    ```
-   This starts Postgres on `127.0.0.1:5434`, adds the API's indexes (`db/indexes.sql`), creates a read-only user (`db/api_readonly_role.sql`) and writes `DATABASE_URL` to `.env`. To use another DrugCentral database instead, copy `.env.example` to `.env` and set `DATABASE_URL`.
+   This starts PostgreSQL 16 + RDKit on `127.0.0.1:5435`, adds the API's indexes (`db/indexes.sql`), creates a read-only user (`db/api_readonly_role.sql`) and writes `DATABASE_URL` to `.env`. To use another DrugCentral database instead, copy `.env.example` to `.env` and set `DATABASE_URL`.
 3. Start the API:
    ```bash
    venv/bin/uvicorn app.main:app --env-file .env

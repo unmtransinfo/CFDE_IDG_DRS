@@ -8,7 +8,7 @@ separate from the eventual AWS deployment, and from the live v1 API.
 | API | https://chiltepin.health.unm.edu/drs/ |
 | Interactive docs | https://chiltepin.health.unm.edu/drs/docs |
 | Health check | https://chiltepin.health.unm.edu/drs/health |
-| Data | DrugCentral dbversion 56 (2026-09-02), restored from the official release dump |
+| Data | DrugCentral dbversion 56 (2026-09-02) + Inxight integration, on PostgreSQL 16 with the RDKit cartridge |
 
 The API is read-only and unauthenticated: it only runs `SELECT` queries, as a database user
 that cannot write.
@@ -32,7 +32,7 @@ Two containers, defined in `compose.yml`:
 | Container | What it is |
 |---|---|
 | `drugcentral-drs-api` | The API image, published on `127.0.0.1:8007` only |
-| `drugcentral-v56` | PostgreSQL 14 with the DrugCentral data, on `127.0.0.1:5434` for local use |
+| `drugcentral-2027` | PostgreSQL 16 + RDKit (`unmtransinfo/drugcen-2027-db` image) with the DrugCentral data, on `127.0.0.1:5435` for local use |
 
 The API reaches the database over a private Docker network, so nothing but Apache can reach
 the API and nothing outside this machine can reach the database. Apache serves the API at
@@ -64,8 +64,8 @@ Settings live in `deploy/chiltepin/.env` (not in git; see `.env.example`).
 
 ## First-time setup
 
-1. Restore the data, if the `drugcentral-v56-data` volume does not exist yet:
-   `scripts/restore_local_db.sh path/to/drugcentral.dump.MMDDYYYY.sql.gz` (about 15 minutes).
+1. Restore the data, if the `drugcentral-2027-data` volume does not exist yet:
+   `scripts/restore_local_db.sh path/to/Drugcentral_2026-09-25.pgdump` (about 15 minutes).
 2. Create `deploy/chiltepin/.env` from `.env.example`, using the read-only user's password.
 3. `docker compose -f deploy/chiltepin/compose.yml up -d`
 4. Install the Apache configuration (needs root):
@@ -83,8 +83,8 @@ Restore the new dump into a fresh volume and point the deployment at it, rather 
 overwriting the running one:
 
 ```bash
-CONTAINER=drugcentral-v57 PORT=5436 VOLUME=drugcentral-v57-data \
-  scripts/restore_local_db.sh path/to/drugcentral.dump.<new>.sql.gz
+CONTAINER=drugcentral-next PORT=5436 VOLUME=drugcentral-next-data \
+  scripts/restore_local_db.sh path/to/Drugcentral_<new-date>.pgdump
 ```
 Then change the volume name in `compose.yml`, run `docker compose ... up -d`, and check
 `/drs/health` reports the new `dbversion`. Keeping the old volume makes rolling back a

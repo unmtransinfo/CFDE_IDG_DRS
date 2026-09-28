@@ -8,18 +8,22 @@ name: drugcentral-drs
 
 services:
   db:
-    image: postgres:14
-    container_name: drugcentral-v56
+    # PG16 + RDKit cartridge image built by the DrugCentral-2023 project (public on
+    # Docker Hub; same digest as the live shishito database). Data: dbversion 56 plus
+    # the Inxight integration, restored from Drugcentral_2026-09-25.pgdump.
+    image: unmtransinfo/drugcen-2027-db:pg16-rdkit2026.03.6
+    container_name: drugcentral-2027
     restart: unless-stopped
     command: ["postgres", "-c", "maintenance_work_mem=1GB", "-c", "max_wal_size=4GB"]
     environment:
       POSTGRES_DB: drugcentral
+      POSTGRES_USER: postgres
       # Only used when initialising an empty volume; the volume below is already restored.
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/chiltepin/.env}
     volumes:
       - pgdata:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5434:5432"   # local admin and tests only
+      - "127.0.0.1:5435:5432"   # local admin and tests only; 5434 stays with the legacy v56 container
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -q -U postgres -d drugcentral"]
       interval: 30s
@@ -46,5 +50,7 @@ services:
 
 volumes:
   pgdata:
+    # Restored dataset volume. The previous drugcentral-v56-data volume is kept
+    # untouched, so rolling back is reverting this name plus the db service above.
     external: true
-    name: drugcentral-v56-data
+    name: drugcentral-2027-data

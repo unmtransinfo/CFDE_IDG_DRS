@@ -13,7 +13,7 @@ Everything below runs on your own machine. For the shared test deployment, see
 
 - **Python 3.11 or newer**
 - **Docker**, to run the database locally (not needed if you point at a database someone else hosts)
-- **The DrugCentral dump**, `drugcentral.dump.09022026.sql.gz` (1.4 GB), and about **6 GB of free disk**
+- **The dataset dump**, `Drugcentral_2026-09-25.pgdump` (1.4 GB; ask the DrugCentral team), and about **15 GB of free disk** (8 GB image + ~5 GB data)
 - **git**
 
 ## 2. Install the Python dependencies
@@ -28,18 +28,18 @@ venv/bin/pip install -r requirements-dev.txt     # app + test dependencies
 
 ## 3. Get a database
 
-**Option A — restore a local copy (recommended).** One command creates a PostgreSQL 14
-container, loads the dump, adds the API's indexes, creates the read-only user and writes
-`.env`:
+**Option A — restore a local copy (recommended).** One command creates a PostgreSQL 16
+container with the RDKit cartridge (image `unmtransinfo/drugcen-2027-db`), loads the dump,
+adds the API's indexes, creates the read-only user and writes `.env`:
 
 ```bash
-scripts/restore_local_db.sh path/to/drugcentral.dump.09022026.sql.gz
+scripts/restore_local_db.sh path/to/Drugcentral_2026-09-25.pgdump
 ```
 
 It takes about 15 minutes, most of it loading the two largest tables. When it finishes you
-have a container listening on `127.0.0.1:5434` with database `drugcentral`.
+have a container listening on `127.0.0.1:5435` with database `drugcentral`.
 
-> On chiltepin this is already done: the container `drugcentral-v56` is running and holds the
+> On chiltepin this is already done: the container `drugcentral-2027` is running and holds the
 > data, so you can skip to step 4.
 
 **Option B — use an existing DrugCentral database.** Copy the template and fill in the
@@ -57,7 +57,7 @@ The database must be dbversion 56 or newer; `pk_az` does not exist in older rele
 `.env` holds one setting, and it is git-ignored:
 
 ```
-DATABASE_URL=postgresql://drs_readonly:<password>@127.0.0.1:5434/drugcentral
+DATABASE_URL=postgresql://drs_readonly:<password>@127.0.0.1:5435/drugcentral
 ```
 
 The API refuses to start if `DATABASE_URL` is missing, rather than failing later.
@@ -164,11 +164,11 @@ non-zero if anything fails.
 ## 9. Looking at the database directly
 
 ```bash
-docker exec -it drugcentral-v56 psql -U postgres -d drugcentral
+docker exec -it drugcentral-2027 psql -U postgres -d drugcentral
 
 # useful one-liners
-docker exec drugcentral-v56 psql -U postgres -d drugcentral -c "select * from dbversion"
-docker exec drugcentral-v56 psql -U postgres -d drugcentral -c "\d pk_az"
+docker exec drugcentral-2027 psql -U postgres -d drugcentral -c "select * from dbversion"
+docker exec drugcentral-2027 psql -U postgres -d drugcentral -c "\d pk_az"
 ```
 
 The API connects as `drs_readonly`, which can only read; `psql -U postgres` is the admin user.
@@ -178,11 +178,11 @@ creates that user. Both are safe to re-run.
 ## 10. Stopping and cleaning up
 
 ```bash
-docker stop drugcentral-v56        # stop the database (data is kept)
-docker start drugcentral-v56       # start it again
+docker stop drugcentral-2027       # stop the database (data is kept)
+docker start drugcentral-2027      # start it again
 ```
 
-The data lives in the Docker volume `drugcentral-v56-data`, not in the container, so removing
+The data lives in the Docker volume `drugcentral-2027-data`, not in the container, so removing
 the container keeps the data. Deleting that volume means restoring the dump again.
 
 ## 11. Troubleshooting
@@ -190,7 +190,7 @@ the container keeps the data. Deleting that volume means restoring the dump agai
 | Symptom | Cause and fix |
 |---|---|
 | `RuntimeError: DATABASE_URL is not set` | No `.env`, or you started uvicorn without `--env-file .env` |
-| `/health` returns 503 | The database is down or unreachable: `docker ps`, then `docker start drugcentral-v56` |
+| `/health` returns 503 | The database is down or unreachable: `docker ps`, then `docker start drugcentral-2027` |
 | `503 Database busy, try again later` | All 15 pooled connections are in use; something is running many slow queries at once |
 | `504 Database query timed out` | A query exceeded 30 seconds; narrow the request |
 | `Address already in use` | Another process has that port; pick another (avoid 8000 and 8007 on chiltepin) |
@@ -209,10 +209,11 @@ pushed to GitHub; the repository has no remote.
 
 ### Background worth keeping
 
-- **Where the data comes from:** the official DrugCentral release dump,
-  `drugcentral.dump.09022026.sql.gz` (dbversion 56). Bivek Panthi confirmed we may use a copy.
-  The updated DrugCentral database he runs on `shishito.health.unm.edu` is not reachable from
-  outside the UNM network, so the API never connects to it; it reads a restored copy instead.
+- **Where the data comes from:** the dataset snapshot `Drugcentral_2026-09-25.pgdump`
+  (dbversion 56 plus the Inxight integration and RDKit chemistry columns), built by Bivek
+  Panthi on shishito and copied to chiltepin. The database he runs on
+  `shishito.health.unm.edu` is not reachable from outside the UNM network, so the API never
+  connects to it; it reads this restored copy instead.
 - **v1 is unaffected:** it still serves the legacy database (dbversion 54) at
   https://uxn2ycvimg.us-east-2.awsapprunner.com from `unmtid-dbs.net:5433`.
 - **Who to ask:** Bivek Panthi for the DrugCentral database and dumps; Dr. Jeremy Yang for
