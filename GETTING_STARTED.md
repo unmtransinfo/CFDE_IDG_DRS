@@ -204,9 +204,9 @@ the container keeps the data. Deleting that volume means restoring the dump agai
 ## What is left to do
 
 Everything in the original migration plan is done except the items below, which is why the
-plan file is no longer needed. As of 2026-11-19, v2 (version 2.0.0) is code-complete and
-tested (414 tests, all 152 endpoints verified against a running server), and a test
-deployment runs on chiltepin at https://chiltepin.health.unm.edu/drs/. Nothing has been
+plan file is no longer needed. As of 2026-11-19, v2 (version 2.0.0) is live at
+https://api.drugcentral.org, where all 152 endpoints pass, and is tested (414 tests). A test
+deployment also runs on chiltepin at https://chiltepin.health.unm.edu/drs/. Nothing has been
 pushed to GitHub; the repository has no remote.
 
 ### Background worth keeping
@@ -216,37 +216,42 @@ pushed to GitHub; the repository has no remote.
   Panthi on shishito and copied to chiltepin. The database he runs on
   `shishito.health.unm.edu` is not reachable from outside the UNM network, so the API never
   connects to it; it reads this restored copy instead.
-- **v1 and its database:** the live API at https://uxn2ycvimg.us-east-2.awsapprunner.com
-  (App Runner service `cfde-idg-drs-api`, us-east-2) still runs the v1 code, against
-  `unmtid-dbs.net:5433`. That database has been upgraded to dbversion 56, including `pk_az`
-  (checked 2026-11-19), so v2 will use the same database. The DrugCentral website's API link
-  points to this service.
+- **Production:** the App Runner service `cfde-idg-drs-api` (us-east-2) runs the ECR image
+  `cfde-idg-drs-api:v2.0.0` (us-east-1), at https://api.drugcentral.org and at the service's
+  original address, https://uxn2ycvimg.us-east-2.awsapprunner.com. The image v1 ran is tagged
+  `v1` in ECR for rollback. The database is v1's, `unmtid-dbs.net:5433`, upgraded to
+  dbversion 56. The `drugcentral.org` DNS zone is in Route 53 in the same AWS account; keep
+  its two `_…acm-validations.aws` records, which renew the HTTPS certificate.
 - **Who to ask:** Bivek Panthi for the DrugCentral database and dumps; Dr. Jeremy Yang for
   what the API should expose (he approved `pk_az`); Dr. Cristian Bologa for `pk_az` itself.
 
 ### Open items
 
 1. **Review v2 with your professor** and get approval before creating the GitHub repository.
-2. **Deploy v2 by updating the existing App Runner service in place,** so the website's API
-   link keeps working: tag the running image `v1` for rollback, push `v2.0.0`, set
-   `DATABASE_URL` to the v1 database, and switch the health check to HTTP `/`. App Runner is
-   closed to new customers, but existing services keep working. `DEPLOYMENT.md` still
-   describes creating a new service.
-3. **Switch to a read-only login.** v2 starts with v1's login, `drugman`, which can write. The
+2. **Point the DrugCentral website's API link at https://api.drugcentral.org/docs.** It still
+   links to the old App Runner address, which works because that address serves the same
+   service. Bivek maintains the site.
+3. **Switch to a read-only login.** v2 runs with v1's login, `drugman`, which can write. The
    API's own sessions are read-only, but the real safeguard is a read-only login: ask Bivek to
    create one (`db/api_readonly_role.sql`) and to run `db/indexes.sql`, then change
    `DATABASE_URL`. Only after that should `drugman`'s password be changed; it is in v1's code
    and in this repository's history.
-4. **Move to `api.drugcentral.org`.** The `drugcentral.org` DNS zone is in the same AWS
-   account (Route 53). Attach the name to the service, point the website's API link at it, and
-   add it to `README.md` and `DEPLOYMENT.md`. A later move to ECS Express Mode, which AWS
-   recommends in place of App Runner, then needs only a DNS change.
+4. **Make the API easier for AI tools to use correctly** (from the DC27 AI-readiness email):
+   return the release, the data cutoff and the CC BY-SA 4.0 license with every response
+   (today only `/dbversion` and `/health` report the version); mark `pk_az` values as model
+   predictions in the responses, not only in the documentation; and add endpoints for
+   approvals, drug-drug interactions and labels, whose tables exist in dbversion 56 (Dr. Yang
+   decides what the API exposes).
 5. **Create the GitHub repository** under the department organization and push, after
    `drugman`'s password has been changed (item 3).
 6. **Tell known v1 users about the change.** Identifiers now match exactly, so some partial
    lookups that worked in v1 return 404 in v2.
 7. **Ask Dr. Bologa about the missing `pk_az` units** for `mh-clint` and `mppb`, whose sibling
    property types do have units.
+8. **Rewrite `DEPLOYMENT.md`** for how v2 is actually deployed: push a new image tag to ECR,
+   update the existing App Runner service to it, and the `api.drugcentral.org` custom domain.
+   A later move to ECS Express Mode, which AWS recommends in place of App Runner, needs only a
+   DNS change.
 
 ### Optional improvements
 

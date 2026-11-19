@@ -2,12 +2,10 @@
 
 A RESTful API providing access to the DrugCentral database with support for JSON, CSV, and TSV export formats.
 
-> **Version 2 (this repository)** serves DrugCentral **dbversion 56 (2026-09-02)**. A test
-> deployment runs at https://chiltepin.health.unm.edu/drs/; the public URL will be added here
-> after the AWS deployment.
-> The currently live API, https://uxn2ycvimg.us-east-2.awsapprunner.com, still runs the v1 code.
-> Its database has been upgraded to dbversion 56, but v1 does not expose `pk_az`, `/health` or
-> `/dbversion`.
+> **Version 2 (this repository)** serves DrugCentral **dbversion 56 (2026-09-02)** at
+> **https://api.drugcentral.org** (interactive docs: https://api.drugcentral.org/docs).
+> It replaced v1 on 2026-11-19; v1's address, https://uxn2ycvimg.us-east-2.awsapprunner.com,
+> now serves the same v2 API. A test deployment runs at https://chiltepin.health.unm.edu/drs/.
 
 ## Overview
 
@@ -26,7 +24,7 @@ The DrugCentral DRS (Data Repository Service) API provides programmatic access t
 
 ## Quick Start
 
-In the examples, `$API` is the base URL, e.g. `http://127.0.0.1:8000` when [running locally](#running-locally).
+In the examples, `$API` is the base URL: `https://api.drugcentral.org`, or e.g. `http://127.0.0.1:8000` when [running locally](#running-locally).
 
 ### Check API and database status
 
