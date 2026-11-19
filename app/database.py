@@ -14,11 +14,14 @@ if not DATABASE_URL:
 CONNECT_TIMEOUT_SECONDS = 5
 STATEMENT_TIMEOUT_MS = 30_000
 
+# Every session is read-only, so PostgreSQL rejects writes even when the login is allowed
+# to make them. This is a safety net, not a security boundary (a session can turn it off);
+# the boundary is a read-only login (db/api_readonly_role.sql).
 engine = create_engine(
     DATABASE_URL,
     connect_args={
         "connect_timeout": CONNECT_TIMEOUT_SECONDS,
-        "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS}",
+        "options": f"-c statement_timeout={STATEMENT_TIMEOUT_MS} -c default_transaction_read_only=on",
     },
     pool_timeout=10,  # wait at most 10s for a free pooled connection
     pool_pre_ping=True,  # check a pooled connection is alive before using it

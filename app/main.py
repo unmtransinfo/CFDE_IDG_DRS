@@ -27,6 +27,7 @@ from app.models import Faers
 from app.models import FaersFemale
 from app.models import FaersMale
 from app.models import PkAz
+from app.models import Dbversion
 from app.database import SessionLocal
 from app.csv_utils import create_csv_response, create_tsv_response, generate_filename
 from sqlalchemy import any_, func, text
@@ -40,7 +41,7 @@ MAX_LIMIT = 1_000_000
 Skip = Annotated[int, Query(ge=0, le=MAX_SKIP)]
 Limit = Annotated[int, Query(ge=0, le=MAX_LIMIT)]
 
-app = FastAPI(title="DrugCentral DRS API")
+app = FastAPI(title="DrugCentral DRS API", version="2.0.0")
 
 # PostgreSQL text cannot contain a NUL character; reject it here instead of failing
 # inside the database driver with a 500.
@@ -85,6 +86,14 @@ def root():
 def health(db: Session = Depends(get_db)):
     dbversion = db.execute(text("SELECT max(version) FROM dbversion")).scalar()
     return {"status": "ok", "database": "ok", "dbversion": dbversion}
+
+# the DrugCentral release this API serves, from the dbversion table
+@app.get("/dbversion")
+def read_dbversion(db: Session = Depends(get_db)):
+    row = db.query(Dbversion).order_by(Dbversion.version.desc()).first()
+    if row is None:
+        raise HTTPException(status_code=404, detail="dbversion not found")
+    return {"version": row.version, "dtime": row.dtime}
 
 # TABLE 1:  act_table_full
 @app.get("/act_table_full")

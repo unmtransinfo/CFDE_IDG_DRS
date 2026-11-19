@@ -27,6 +27,13 @@ load_dotenv(REPO / ".env")
 from app.database import engine  # noqa: E402
 from tests.samples import LIST_LIMIT, build_cases, contains_pk, response_rows  # noqa: E402
 
+# Routes that are not table lookups, each with a check of its JSON body.
+STATUS_CHECKS = (
+    ("/", lambda body: body == {"status": "ok"}),
+    ("/health", lambda body: body.get("database") == "ok" and body.get("dbversion", 0) >= 56),
+    ("/dbversion", lambda body: body.get("version", 0) >= 56 and bool(body.get("dtime"))),
+)
+
 
 def fetch(url):
     start = time.perf_counter()
@@ -63,7 +70,7 @@ def main():
 
     with engine.connect() as conn:
         cases = build_cases(conn)
-    print(f"{len(cases) + 2} endpoints x {args.repeat} calls each, against {args.base}\n")
+    print(f"{len(cases) + len(STATUS_CHECKS)} endpoints x {args.repeat} calls each, against {args.base}\n")
     print(f"{'result':6} {'endpoint':44} {'fmt':4} {'rows':>6} {'200s':>5} {'same':>4} {'data':>4} {'404':>3}  ms min/med/max")
 
     failures = 0
@@ -74,8 +81,7 @@ def main():
         print(f"{'PASS' if ok else 'FAIL':6} {route:44} {kind:4} {s['rows']!s:>6} {s['200s']:>5} {s['same']:>4} "
               f"{s['content']:>4} {s['404']:>3}  {s['ms']}")
 
-    for path, check in (("/", lambda body: body == {"status": "ok"}),
-                        ("/health", lambda body: body.get("database") == "ok" and body.get("dbversion", 0) >= 56)):
+    for path, check in STATUS_CHECKS:
         ok, s = run_case(args.base, path, args.repeat, check)
         report(ok, path, "json", s)
     for case in cases:
@@ -88,7 +94,7 @@ def main():
         ok, s = run_case(args.base, case.path, args.repeat, check, case.missing_path, case.kind)
         report(ok, case.route, case.kind, s)
 
-    total = len(cases) + 2
+    total = len(cases) + len(STATUS_CHECKS)
     print(f"\n{total - failures}/{total} endpoints passed ({args.repeat} calls each)")
     return 1 if failures else 0
 

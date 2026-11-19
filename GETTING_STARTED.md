@@ -80,6 +80,7 @@ Add `--reload` while editing code to restart on save.
 ```bash
 curl http://127.0.0.1:8010/          # {"status":"ok"} - the process is up
 curl http://127.0.0.1:8010/health    # {"status":"ok","database":"ok","dbversion":56}
+curl http://127.0.0.1:8010/dbversion # {"version":56,"dtime":"2026-09-02T00:55:33.731000"}
 ```
 
 If `/` works but `/health` returns 503, the API is running but cannot reach the database:
@@ -144,7 +145,7 @@ case-insensitive, ATC codes match by prefix, and names and free text are substri
 With `DATABASE_URL` pointing at a dbversion 56 database:
 
 ```bash
-venv/bin/pytest                 # 383 integration tests, about 40 seconds
+venv/bin/pytest                 # 414 integration tests, about 40 seconds
 venv/bin/pytest tests/test_lookups.py -v     # one file, verbose
 ```
 
@@ -203,8 +204,9 @@ the container keeps the data. Deleting that volume means restoring the dump agai
 ## What is left to do
 
 Everything in the original migration plan is done except the items below, which is why the
-plan file is no longer needed. As of 2026-09-15, v2 is code-complete, tested (383 tests, all
-151 endpoints verified repeatedly) and deployed on chiltepin for the team. Nothing has been
+plan file is no longer needed. As of 2026-11-19, v2 (version 2.0.0) is code-complete and
+tested (414 tests, all 152 endpoints verified against a running server), and a test
+deployment runs on chiltepin at https://chiltepin.health.unm.edu/drs/. Nothing has been
 pushed to GitHub; the repository has no remote.
 
 ### Background worth keeping
@@ -214,26 +216,35 @@ pushed to GitHub; the repository has no remote.
   Panthi on shishito and copied to chiltepin. The database he runs on
   `shishito.health.unm.edu` is not reachable from outside the UNM network, so the API never
   connects to it; it reads this restored copy instead.
-- **v1 is unaffected:** it still serves the legacy database (dbversion 54) at
-  https://uxn2ycvimg.us-east-2.awsapprunner.com from `unmtid-dbs.net:5433`.
+- **v1 and its database:** the live API at https://uxn2ycvimg.us-east-2.awsapprunner.com
+  (App Runner service `cfde-idg-drs-api`, us-east-2) still runs the v1 code, against
+  `unmtid-dbs.net:5433`. That database has been upgraded to dbversion 56, including `pk_az`
+  (checked 2026-11-19), so v2 will use the same database. The DrugCentral website's API link
+  points to this service.
 - **Who to ask:** Bivek Panthi for the DrugCentral database and dumps; Dr. Jeremy Yang for
   what the API should expose (he approved `pk_az`); Dr. Cristian Bologa for `pk_az` itself.
 
 ### Open items
 
 1. **Review v2 with your professor** and get approval before creating the GitHub repository.
-2. **Decide who hosts the database for the AWS deployment.** If a publicly reachable v56
-   database is provided (as `unmtid-dbs.net` does for v1), the API just points at it. If not,
-   restore the dump into RDS. This question is with Bivek and Dr. Yang.
-3. **Deploy to AWS.** App Runner is discontinued, so the target is ECS Fargate: push the image
-   to ECR in the cluster's region, supply `DATABASE_URL` from Secrets Manager or SSM, send logs
-   to CloudWatch, and point the load balancer's health check at `/` while an alarm watches
-   `/health` (see the note in [DEPLOYMENT.md](DEPLOYMENT.md)). `DEPLOYMENT.md` still describes
-   App Runner and needs rewriting for ECS.
-4. **Add the public URL** to `README.md` and `DEPLOYMENT.md` once deployed.
-5. **Create the GitHub repository** under the department organization and push.
-6. **Decide what happens to v1:** run both in parallel, or retire v1 once v2 is validated, and
-   tell known users about the new endpoint.
+2. **Deploy v2 by updating the existing App Runner service in place,** so the website's API
+   link keeps working: tag the running image `v1` for rollback, push `v2.0.0`, set
+   `DATABASE_URL` to the v1 database, and switch the health check to HTTP `/`. App Runner is
+   closed to new customers, but existing services keep working. `DEPLOYMENT.md` still
+   describes creating a new service.
+3. **Switch to a read-only login.** v2 starts with v1's login, `drugman`, which can write. The
+   API's own sessions are read-only, but the real safeguard is a read-only login: ask Bivek to
+   create one (`db/api_readonly_role.sql`) and to run `db/indexes.sql`, then change
+   `DATABASE_URL`. Only after that should `drugman`'s password be changed; it is in v1's code
+   and in this repository's history.
+4. **Move to `api.drugcentral.org`.** The `drugcentral.org` DNS zone is in the same AWS
+   account (Route 53). Attach the name to the service, point the website's API link at it, and
+   add it to `README.md` and `DEPLOYMENT.md`. A later move to ECS Express Mode, which AWS
+   recommends in place of App Runner, then needs only a DNS change.
+5. **Create the GitHub repository** under the department organization and push, after
+   `drugman`'s password has been changed (item 3).
+6. **Tell known v1 users about the change.** Identifiers now match exactly, so some partial
+   lookups that worked in v1 return 404 in v2.
 7. **Ask Dr. Bologa about the missing `pk_az` units** for `mh-clint` and `mppb`, whose sibling
    property types do have units.
 

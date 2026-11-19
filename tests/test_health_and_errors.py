@@ -1,5 +1,7 @@
 import pytest
-from sqlalchemy import create_engine
+from psycopg2.errors import ReadOnlySqlTransaction
+from sqlalchemy import create_engine, text
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.orm import sessionmaker
 
 from app.database import engine
@@ -47,7 +49,27 @@ def test_health_reports_database_and_version(client):
     assert body["dbversion"] >= 56
 
 
-@pytest.mark.parametrize("path", ["/health", "/structures?limit=1", "/structures/id/5392", "/faers/csv?limit=5"])
+def test_dbversion_returns_the_table_row(client, sql):
+    r = client.get("/dbversion")
+    assert r.status_code == 200
+    version = sql("select max(version) from dbversion")
+    dtime = sql("select dtime from dbversion where version = :v", v=version)
+    assert r.json() == {"version": version, "dtime": dtime.isoformat()}
+
+
+def test_api_sessions_are_read_only():
+    # Set by the API's own connection options (source "client"), not only by the login's
+    # role, so it also holds when the API uses a login that is allowed to write.
+    with engine.connect() as conn:
+        setting, source = conn.execute(text(
+            "select setting, source from pg_settings where name = 'default_transaction_read_only'")).one()
+        assert (setting, source) == ("on", "client")
+        with pytest.raises(DBAPIError) as e:
+            conn.execute(text("create temp table read_only_check (x int)"))
+        assert isinstance(e.value.orig, ReadOnlySqlTransaction)
+
+
+@pytest.mark.parametrize("path", ["/health", "/dbversion", "/structures?limit=1", "/structures/id/5392", "/faers/csv?limit=5"])
 def test_unreachable_database_returns_503(client, use_engine, path):
     use_engine(create_engine(UNREACHABLE, connect_args={"connect_timeout": 2}))
     r = client.get(path)

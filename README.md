@@ -2,10 +2,12 @@
 
 A RESTful API providing access to the DrugCentral database with support for JSON, CSV, and TSV export formats.
 
-> **Version 2 (this repository)** serves the updated DrugCentral database, **dbversion 56 (2026-09-02)**.
-> It has not been deployed yet; its public URL will be added here after deployment.
-> The currently live API (v1) serves the legacy database (dbversion 54, 2023-11-01) at
-> https://uxn2ycvimg.us-east-2.awsapprunner.com.
+> **Version 2 (this repository)** serves DrugCentral **dbversion 56 (2026-09-02)**. A test
+> deployment runs at https://chiltepin.health.unm.edu/drs/; the public URL will be added here
+> after the AWS deployment.
+> The currently live API, https://uxn2ycvimg.us-east-2.awsapprunner.com, still runs the v1 code.
+> Its database has been upgraded to dbversion 56, but v1 does not expose `pk_az`, `/health` or
+> `/dbversion`.
 
 ## Overview
 
@@ -13,9 +15,11 @@ The DrugCentral DRS (Data Repository Service) API provides programmatic access t
 
 ## What's new in v2
 
-- **Updated data:** DrugCentral dbversion 56, with 121 drugs added since dbversion 54.
+- **Built for dbversion 56:** models and tests match DrugCentral dbversion 56, which adds 121 drugs since dbversion 54.
 - **`pk_az` endpoints:** predicted pharmacokinetic, toxicological and safety properties from AstraZeneca's models ([details](#pk_az-predicted-properties)).
 - **`/health` endpoint:** checks the database and reports the data version.
+- **`/dbversion` endpoint:** the DrugCentral release the API serves, with its date.
+- **Read-only database sessions:** every database session is read-only, so the API cannot change data even if its login could.
 - **Clear errors when the database has problems:** `503` when it is unreachable or busy, `504` when a query runs longer than 30 seconds, instead of requests hanging.
 - **Exact identifier matching:** identifiers such as InChIKeys and UniProt accessions match exactly (case-insensitive) instead of as substrings ([matching rules](#matching-rules)).
 - **Stable ordering:** every list, export and lookup is sorted by the table's primary key, so `skip`/`limit` pages are repeatable.
@@ -29,6 +33,7 @@ In the examples, `$API` is the base URL, e.g. `http://127.0.0.1:8000` when [runn
 ```bash
 curl $API/          # {"status":"ok"}  - the API process is up
 curl $API/health    # {"status":"ok","database":"ok","dbversion":56} - 503 if the database is unreachable
+curl $API/dbversion # {"version":56,"dtime":"2026-09-02T00:55:33.731000"}
 ```
 
 ### Get data in JSON format
@@ -55,6 +60,7 @@ The complete, interactive list is at `$API/docs` (OpenAPI schema at `$API/openap
 |---|---|
 | `/` | API process status (does not touch the database) |
 | `/health` | Database status and data version |
+| `/dbversion` | The DrugCentral release served: version and date |
 | `/{table}?skip=0&limit=10` | Rows of a table, ordered by primary key |
 | `/{table}/{column}/{value}` | Rows where a column matches a value ([matching rules](#matching-rules)); 404 if none |
 | `/{table}/csv`, `/{table}/tsv` | Export rows as CSV/TSV (`skip`/`limit`, default limit 1000) |

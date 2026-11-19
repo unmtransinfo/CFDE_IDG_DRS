@@ -31,8 +31,11 @@ class Case:
     pk: Optional[tuple]          # primary key of a row the response must include (lookups only)
 
 
+STATUS_ROUTES = ("/", "/health", "/dbversion")  # not table lookups; checked separately
+
+
 def api_routes():
-    return [r for r in app.routes if isinstance(r, APIRoute) and r.path not in ("/", "/health")]
+    return [r for r in app.routes if isinstance(r, APIRoute) and r.path not in STATUS_ROUTES]
 
 
 def _sample(conn, table, column, pk_columns):
